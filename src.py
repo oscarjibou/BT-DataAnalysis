@@ -12,7 +12,7 @@ print(raw_data.head())
 # print(raw_data.dtypes)
 
 # selected the first 100 rows
-selected_data = raw_data.head(100)
+selected_data = raw_data.head(10)
 
 plt.figure(figsize=(12, 6))
 plt.plot(
