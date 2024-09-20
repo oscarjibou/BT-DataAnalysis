@@ -21,7 +21,8 @@ for i in data["brand"]:
 
 sales = ["volume.sales", "value.sales", "unit.sales"]
 
-pack_size = data["pack.size"].isin(["0 - 350 GR", "351 - 500 GR"])
+# pack_size = data["pack.size"].isin(["0 - 350 GR", "351 - 500 GR"])
+pack_size = data["pack.size"].isin(["0 - 350 GR"])
 
 brand35 = data["brand"].isin(["brand-35"])
 brand15 = data["brand"].isin(["brand-15"])
@@ -111,12 +112,15 @@ def log_graphs(brand, sales):
     plt.tight_layout()
 
 
-plot_data(brand35, "volume.sales")
-plot_data(brand14, "volume.sales")
-plot_data(brand15, "volume.sales")
-plot_data(brandOther, "volume.sales")
+# plot_data(brand35, "volume.sales")
+# plot_data(brand14, "volume.sales")
+# plot_data(brand15, "volume.sales")
+# plot_data(brandOther, "volume.sales")
 
 log_graphs(brand35, "volume.sales")
+log_graphs(brand14, "volume.sales")
+log_graphs(brand15, "volume.sales")
+log_graphs(brandOther, "volume.sales")
 
 plt.show()
 
