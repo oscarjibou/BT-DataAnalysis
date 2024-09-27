@@ -21,8 +21,10 @@ for i in data["brand"]:
 
 sales = ["volume.sales", "value.sales", "unit.sales"]
 
-# pack_size = data["pack.size"].isin(["0 - 350 GR", "351 - 500 GR"])
-pack_size = data["pack.size"].isin(["0 - 350 GR"])
+pack_size350 = data["pack.size"].isin(["0 - 350 GR"])
+pack_size500 = data["pack.size"].isin(["351 - 500 GR"])
+pack_size1000 = data["pack.size"].isin(["701 - 1000 GR"])
+pack_size = data["pack.size"].isin(["0 - 350 GR", "351 - 500 GR"])
 
 brand35 = data["brand"].isin(["brand-35"])
 brand15 = data["brand"].isin(["brand-15"])
@@ -40,25 +42,25 @@ supermarketC = data["supermarket"].isin(["supermarket-C"])
 supermarketD = data["supermarket"].isin(["supermarket-D"])
 
 
-def plot_data(brand, sales):
+def plot_data(brand, supermarket, pack_size, sales):
     fig, ax = plt.subplots(2, 2, figsize=(15, 7))
 
-    ax[0, 0].plot(data[(brand) & (variantF) & (supermarketA) & (pack_size)][sales])
+    ax[0, 0].plot(data[(brand) & (variantF) & (supermarket) & (pack_size)][sales])
     ax[0, 0].set_title("Flavoured")
     ax[0, 0].set_ylabel(sales)
     ax[0, 0].grid(True)
 
-    ax[0, 1].plot(data[(brand) & (variantS) & (supermarketA) & (pack_size)][sales])
+    ax[0, 1].plot(data[(brand) & (variantS) & (supermarket) & (pack_size)][sales])
     ax[0, 1].set_title("Standard")
     ax[0, 1].set_ylabel(sales)
     ax[0, 1].grid(True)
 
-    ax[1, 0].plot(data[(brand) & (variantL) & (supermarketA) & (pack_size)][sales])
+    ax[1, 0].plot(data[(brand) & (variantL) & (supermarket) & (pack_size)][sales])
     ax[1, 0].set_title("Light")
     ax[1, 0].set_ylabel(sales)
     ax[1, 0].grid(True)
 
-    ax[1, 1].plot(data[(brand) & (variantV) & (supermarketA) & (pack_size)][sales])
+    ax[1, 1].plot(data[(brand) & (variantV) & (supermarket) & (pack_size)][sales])
     ax[1, 1].set_title("Vegan")
     ax[1, 1].set_ylabel(sales)
     ax[1, 1].grid(True)
@@ -67,64 +69,9 @@ def plot_data(brand, sales):
     plt.tight_layout()
 
 
-# haz logaritmo de las ventas
-def log_graphs(brand, sales):
-    fig, ax = plt.subplots(2, 1, figsize=(13, 10))
-
-    ax[0].plot(
-        1 / np.log(data[(brand) & (variantF) & (supermarketA) & (pack_size)][sales])
-    )
-    ax[0].plot(
-        1 / np.log(data[(brand) & (variantS) & (supermarketA) & (pack_size)][sales])
-    )
-    ax[0].plot(
-        1 / np.log(data[(brand) & (variantL) & (supermarketA) & (pack_size)][sales])
-    )
-    ax[0].plot(
-        1 / np.log(data[(brand) & (variantV) & (supermarketA) & (pack_size)][sales])
-    )
-    ax[0].set_title("Log Volume Sales Inverse")
-    ax[0].set_ylabel("volume.sales")
-    ax[0].set_yscale("log")
-    ax[0].grid(True, which="both")
-    ax[0].legend(["Flavoured", "Standard", "Light", "Vegan"])
-
-    ax[1].plot(
-        data[(brand) & (variantF) & (supermarketA) & (pack_size)]["volume.sales"]
-    )
-    ax[1].plot(
-        data[(brand) & (variantS) & (supermarketA) & (pack_size)]["volume.sales"]
-    )
-    ax[1].plot(
-        data[(brand) & (variantL) & (supermarketA) & (pack_size)]["volume.sales"]
-    )
-    ax[1].plot(
-        data[(brand) & (variantV) & (supermarketA) & (pack_size)]["volume.sales"]
-    )
-    ax[1].set_title("Volume Sales")
-    ax[1].set_ylabel("volume.sales")
-    ax[1].grid(
-        True,
-    )
-    ax[1].legend(["Flavoured", "Standard", "Light", "Vegan"])
-
-    plt.suptitle(f"{data[brand]['brand'].unique()} - {sales}")
-    plt.tight_layout()
-
-
-# plot_data(brand35, "volume.sales")
-# plot_data(brand14, "volume.sales")
-# plot_data(brand15, "volume.sales")
-# plot_data(brandOther, "volume.sales")
-
-log_graphs(brand35, "volume.sales")
-log_graphs(brand14, "volume.sales")
-log_graphs(brand15, "volume.sales")
-log_graphs(brandOther, "volume.sales")
+plot_data(brand35, pack_size350, supermarketA, "volume.sales")
+plot_data(brand35, pack_size350, supermarketB, "volume.sales")
+plot_data(brand35, pack_size350, supermarketC, "volume.sales")
+plot_data(brand35, pack_size350, supermarketD, "volume.sales")
 
 plt.show()
-
-# log_graphs(brand35, "volume.sales")
-# log_graphs(brand15, "volume.sales")
-# log_graphs(brand14, "volume.sales")
-# log_graphs(brandOther, "volume.sales")
