@@ -5,6 +5,7 @@ import statsmodels.api as sm
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.stattools import adfuller
 
+
 class SalesAnalysis:
     def __init__(self, raw_data):
 
@@ -14,6 +15,17 @@ class SalesAnalysis:
         # CleaningData
         self.data = self.cleaning_data()
 
+        self.__variables__()
+
+        # Convert the weeks into months using the convert_weeks_to_months method
+        self.data = self.convert_weeks_to_months()
+
+        self.__variables__()  # update the variables after the conversion
+
+        # # Convert the 'date' column to datetime format wihout the time only the date
+        # self.data["date"] = self.data["date"].dt.date
+
+    def __variables__(self):
         # Define the conditions for the supermarkets
         self.supermarketA = self.data["supermarket"] == "supermarket-A"
         self.supermarketB = self.data["supermarket"] == "supermarket-B"
@@ -36,12 +48,6 @@ class SalesAnalysis:
         self.brand14 = self.data["brand"] == "brand-14"
         self.brand15 = self.data["brand"] == "brand-15"
         self.brandOther = self.data["brand"] == "other"
-
-        # Convert the weeks into months using the convert_weeks_to_months method
-        self.data = self.convert_weeks_to_months()
-
-        # Convert the 'date' column to datetime format wihout the time only the date
-        self.data["date"] = self.data["date"].dt.date
 
     def cleaning_data(self):
         """
@@ -132,7 +138,21 @@ class SalesAnalysis:
 
         return monthly_data
 
-    def plot_all_separate_flavour(self, brand, sales="volume.sales"):
+    def detail_plot(
+        self, brand, supermarket, pack_size, variant, sales="volume.sales", plot=True
+    ):
+
+        filtered_data = self.data[brand & supermarket & pack_size & variant]
+
+        plt.figure(figsize=(10, 6))
+        plt.plot(filtered_data["date"], filtered_data[sales])
+        plt.xlabel("Date")
+        plt.ylabel(sales)
+        plt.grid(True)
+        if plot:
+            plt.show()
+
+    def separate_plot_by_flavour(self, brand, pack_size, sales="volume.sales"):
         """
         Plots sales data for different flavours of a given brand across multiple supermarkets and pack sizes.
 
@@ -177,16 +197,10 @@ class SalesAnalysis:
                     "supermercado D",
                 ],
             ):
-                filtered_data = self.data[
-                    (self.data["brand"] == brand)
-                    & (self.data["pack.size"] == "0 - 350 GR")
-                    & flavour
-                    & supermarket
-                ]
+                filtered_data = self.data[brand & pack_size & flavour & supermarket]
                 ax[num1, num2].plot(
                     filtered_data["date"],
                     filtered_data[sales],
-                    label=f"{label} - {"0 - 350 GR"}",
                 )
 
             ax[num1, num2].set_title(
@@ -206,48 +220,6 @@ class SalesAnalysis:
         # Ajustar el diseño y mostrar la gráfica
         plt.tight_layout()
         plt.show()
-
-    def plot_detail_graph(self, brand, flavour, sales="volume.sales"):
-        """
-        Plots a detailed graph of sales data for a specific brand and flavour across different supermarkets.
-
-        Parameters:
-        brand (str): The brand of the product to filter the data.
-        flavour (str): The flavour of the product to filter the data.
-        sales (str, optional): The sales metric to plot. Defaults to "volume.sales".
-
-        Returns:
-        None
-        """
-
-        plt.figure(figsize=(10, 6))
-
-        pack_sizes = self.data["pack.size"].unique()
-
-        for pack_size in pack_sizes:
-            for supermarket, label in zip(
-                [
-                    self.supermarketA,
-                    self.supermarketB,
-                    self.supermarketC,
-                    self.supermarketD,
-                ][
-                    "supermercado A",
-                    "supermercado B",
-                    "supermercado C",
-                    "supermercado D",
-                ]
-            ):
-
-                filtered_data = self.data[
-                    (self.data["brand"] == brand)
-                    & (self.data["pack.size"] == pack_size)
-                    & flavour
-                    & supermarket
-                ]
-
-                plt.plot(filtered_data["date"], filtered_data[sales])
-                plt.show()
 
     def modelization(self, data_filtered_by_brand):
         """
@@ -344,7 +316,6 @@ class SalesAnalysis:
         plot_pacf(residuals, lags=lags)
         plt.title("PACF residuals")
         plt.show()
-        
 
     def test_stationarity(self, data_dummies, sales="volume.sales"):
         """
@@ -364,7 +335,7 @@ class SalesAnalysis:
         - The ADF statistic indicates if the series is stationary. If the value is very negative and less than the critical values, the series is likely stationary.
         - The p-value: If it is less than 0.05, you can reject the null hypothesis of non-stationarity, indicating that the series is stationary.
         """
-        
+
         # Dickie-Fuller's test
         adf_result = adfuller(data_dummies[sales])
 
@@ -377,71 +348,3 @@ class SalesAnalysis:
 
         """ El estadístico ADF te dice si la serie es estacionaria. Si el valor es muy negativo y menor que los valores críticos, entonces es probable que la serie sea estacionaria.
         El valor p: Si es menor a 0.05, puedes rechazar la hipótesis nula de no estacionariedad, lo que indica que la serie es estacionaria."""
-
-
-    def plot_flavours_by_brand(self, brand):
-        """
-        Dibuja cuatro gráficas de ventas de volumen por cada variante de sabor
-        para un conjunto de supermercados. Las gráficas muestran la serie de tiempo
-        de las ventas de volumen por marca y supermercado.
-
-        Parameters:
-        -----------
-        brand : str
-            La marca para la cual se deben mostrar los datos de ventas.
-
-        Returns:
-        --------
-        None
-        """
-
-        # Crear una figura con 4 subgráficas
-        fig, axs = plt.subplots(2, 2, figsize=(15, 10))
-
-        # Definir los sabores
-        flavours = [self.variantF, self.variantS, self.variantL, self.variantV]
-        flavour_names = ["Flavoured", "Standard", "Light", "Vegan"]
-
-        # Definir los supermercados
-        supermarkets = [
-            self.supermarketA,
-            self.supermarketB,
-            self.supermarketC,
-            self.supermarketD,
-        ]
-        supermarket_names = [
-            "Supermercado A",
-            "Supermercado B",
-            "Supermercado C",
-            "Supermercado D",
-        ]
-
-        # Iterar por cada sabor
-        for i, (flavour, flavour_name) in enumerate(zip(flavours, flavour_names)):
-            # Elegir el eje en la subgráfica
-            ax = axs[i // 2, i % 2]
-
-            # Iterar por cada supermercado
-            for supermarket, supermarket_name in zip(supermarkets, supermarket_names):
-                # Filtrar los datos
-                filtered_data = self.data[
-                    (self.data["brand"] == brand) & flavour & supermarket
-                ]
-
-                # Hacer el gráfico
-                ax.plot(
-                    filtered_data["date"],
-                    filtered_data["volume.sales"],
-                    label=supermarket_name,
-                )
-
-            # Configurar la subgráfica
-            ax.set_title(f"Ventas de {flavour_name}")
-            ax.set_xlabel("Fecha")
-            ax.set_ylabel("Volume Sales")
-            ax.legend()
-            ax.grid(True)
-
-        # Ajustar el diseño para que no se solapen las gráficas
-        plt.tight_layout()
-        plt.show()
