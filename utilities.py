@@ -6,19 +6,19 @@ import matplotlib.pyplot as plt
 class SalesAnalysis:
     def __init__(self, raw_data):
 
-        # Asignamos los datos originales a un atributo de la clase
+        # Assign the original data to a class attribute
         self.raw_data = raw_data
 
-        # Limpiamos los datos usando el método cleaning_data de la clase
+        # CleaningData
         self.data = self.cleaning_data()
 
-        # Definimos las condiciones para los supermercados
+        # Define the conditions for the supermarkets
         self.supermarketA = self.data["supermarket"] == "supermarket-A"
         self.supermarketB = self.data["supermarket"] == "supermarket-B"
         self.supermarketC = self.data["supermarket"] == "supermarket-C"
         self.supermarketD = self.data["supermarket"] == "supermarket-D"
 
-        # Definimos las condiciones para las variantes
+        # Define the conditions for the variants
         self.variantF = self.data["variant"] == "flavoured"
         self.variantS = self.data["variant"] == "standard"
         self.variantL = self.data["variant"] == "light"
@@ -35,7 +35,21 @@ class SalesAnalysis:
         self.brand15 = self.data["brand"] == "brand-15"
         self.brancOther = self.data["brand"] == "other"
 
+        # Convert the weeks into months using the convert_weeks_to_months method
+        self.data = self.convert_weeks_to_months()
+
     def cleaning_data(self):
+        """
+        Cleans the raw data by replacing certain brand names with 'other'.
+
+        This method performs the following steps:
+        1. Creates a copy of the raw data.
+        2. Iterates through the 'brand' column of the data.
+        3. Replaces any brand name that is not 'brand-15', 'brand-14', or 'brand-35' with 'other'.
+
+        Returns:
+            pandas.DataFrame: The cleaned data with specified brand names replaced.
+        """
 
         data = self.raw_data.copy()
         # data.set_index("date", inplace=True)
@@ -49,6 +63,16 @@ class SalesAnalysis:
         return data
 
     def convert_weeks_to_months(self):
+        """
+        Converts weekly sales data to monthly aggregated data.
+
+        This method processes the sales data for different supermarkets, variants, pack sizes, and brands,
+        aggregating the data on a monthly basis. The aggregation includes summing up the sales volumes, unit sales,
+        and value sales, while keeping the first occurrence of supermarket, variant, pack size, and brand for each month.
+
+        Returns:
+            pd.DataFrame: A DataFrame containing the monthly aggregated sales data.
+        """
 
         monthly_data = pd.DataFrame()
 
@@ -76,9 +100,26 @@ class SalesAnalysis:
                             supermarket & variant & pack_size & brand
                         ]
 
+                        # filtered_data = filtered_data.groupby(
+                        #     pd.Grouper(key="date", freq="M")
+                        # ).sum()
+
                         filtered_data = filtered_data.groupby(
-                            pd.Grouper(key="date", freq="M")
-                        ).sum()
+                            pd.Grouper(
+                                key="date",
+                                freq="M",
+                            )
+                        ).agg(
+                            {
+                                "volume.sales": "sum",
+                                "unit.sales": "sum",
+                                "value.sales": "sum",
+                                "supermarket": "first",
+                                "variant": "first",
+                                "pack.size": "first",
+                                "brand": "first",
+                            }
+                        )
 
                         filtered_data.reset_index(inplace=True)
 
@@ -86,8 +127,30 @@ class SalesAnalysis:
 
         return monthly_data
 
-    # Actualización del código para incluir todos los pack sizes
     def plot_all_separate_flavour(self, brand, sales="volume.sales"):
+        """
+        Plots sales data for different flavours of a given brand across multiple supermarkets and pack sizes.
+
+        Parameters:
+        -----------
+        brand : str
+            The brand for which the sales data is to be plotted.
+        sales : str, optional
+            The column name in the data representing the sales metric to be plotted (default is "volume.sales").
+
+        Returns:
+        --------
+        None
+            This function does not return any value. It generates and displays a plot.
+
+        Notes:
+        ------
+        - The function creates a 2x2 subplot grid where each subplot represents sales data for a different flavour variant.
+        - The sales data is filtered by brand, pack size, and supermarket before plotting.
+        - Each subplot contains sales data for different pack sizes and supermarkets.
+        - The function assumes that `self.data` contains the sales data and `self.variantF`, `self.variantS`, `self.variantL`, and `self.variantV` are the flavour variants to be plotted.
+        - The function also assumes that `self.supermarketA`, `self.supermarketB`, `self.supermarketC`, and `self.supermarketD` are the supermarket filters.
+        """
 
         fig, ax = plt.subplots(2, 2, figsize=(15, 7), sharex=True)
 
@@ -141,6 +204,17 @@ class SalesAnalysis:
         plt.show()
 
     def plot_detail_graph(self, brand, flavour, sales="volume.sales"):
+        """
+        Plots a detailed graph of sales data for a specific brand and flavour across different supermarkets.
+
+        Parameters:
+        brand (str): The brand of the product to filter the data.
+        flavour (str): The flavour of the product to filter the data.
+        sales (str, optional): The sales metric to plot. Defaults to "volume.sales".
+
+        Returns:
+        None
+        """
 
         plt.figure(figsize=(10, 6))
 
