@@ -1,13 +1,11 @@
 from utilities import *
 
-(raw_data, data) = cleaning_data("data/Datos_Market_copy.xlsx")
+raw_data = pd.read_excel("data/Datos_Market_copy.xlsx")
 
-variantF = data["variant"] == "flavoured"
-variantS = data["variant"] == "standard"
-variantL = data["variant"] == "light"
-variantV = data["variant"] == "vegan"
+sales_analysis = SalesAnalysis(raw_data)
 
-supermarketA = data["supermarket"] == "supermarket-A"
-supermarketB = data["supermarket"] == "supermarket-B"
-supermarketC = data["supermarket"] == "supermarket-C"
-supermarketD = data["supermarket"] == "supermarket-D"
+data = sales_analysis.data
+
+# sales_analysis.plot_all_separate_flavour("brand-35")
+
+sales_analysis.plot_flavours_by_brand("brand-35")
