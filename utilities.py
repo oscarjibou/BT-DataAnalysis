@@ -221,6 +221,170 @@ class SalesAnalysis:
         plt.tight_layout()
         plt.show()
 
+    def plot_everything_in_4_plots(
+        self, brand, sales="volume.sales", keepAxisX=True, keepAxisY=False
+    ):
+        """
+        Plots sales data for different product variants across multiple supermarkets and package sizes in a 2x2 grid of subplots.
+
+        Parameters:
+        -----------
+        self : object
+            The instance of the class containing the data and attributes required for plotting.
+        brand : pandas.Series
+            A boolean series used to filter the data for the specified brand.
+        sales : str, optional
+            The column name in the data representing sales figures to be plotted. Default is "volume.sales".
+        keepAxisX : bool, optional
+            If True, the x-axis will be shared among subplots. Default is True.
+        keepAxisY : bool, optional
+            If True, the y-axis will be shared among subplots. Default is False.
+
+        Returns:
+        --------
+        None
+            This function does not return any value. It generates and displays a plot.
+
+        Notes:
+        ------
+        - The function iterates over predefined supermarkets and package sizes to filter and plot the data.
+        - Each subplot represents sales data for a specific product variant (e.g., Flavoured, Standard, Light, Vegan).
+        - The function ensures that only non-empty data with non-zero sales are plotted.
+        - Legends, titles, and grid lines are added to each subplot for better readability.
+        - The layout of the plots is adjusted using `plt.tight_layout()` for a cleaner appearance.
+        """
+
+        fig, ax = plt.subplots(
+            2, 2, figsize=(15, 10), sharex=keepAxisX, sharey=keepAxisY
+        )
+
+        def plot_variant(ax, variant, title, row, col):
+            # Iterar por cada supermercado
+            for supermarket, supermarket_label in zip(
+                [
+                    self.supermarketA,
+                    self.supermarketB,
+                    self.supermarketC,
+                    self.supermarketD,
+                ],
+                ["Supermarket A", "Supermarket B", "Supermarket C", "Supermarket D"],
+            ):
+                # Iterar por cada tamaño de paquete
+                for pack_size, pack_label in zip(
+                    [
+                        self.pack350,
+                        self.pack500,
+                        self.pack600,
+                        self.pack700,
+                        self.pack1000,
+                    ],
+                    [
+                        "0 - 350 GR",
+                        "351 - 500 GR",
+                        "450 - 600 GR",
+                        "501 - 700 GR",
+                        "701 - 1000 GR",
+                    ],
+                ):
+                    filtered_data = self.data[brand & variant & supermarket & pack_size]
+                    # ax[row, col].plot(
+                    #     filtered_data["date"],
+                    #     filtered_data[sales],
+                    #     label=f"{supermarket_label} - {pack_label}",
+                    # )
+
+                    # Verificar si los datos no están vacíos ni tienen solo ceros en las ventas
+                    if not filtered_data.empty and filtered_data[sales].sum() > 0:
+                        ax[row, col].plot(
+                            filtered_data["date"],
+                            filtered_data[sales],
+                            label=f"{supermarket_label} - {pack_label}",
+                        )
+
+            ax[row, col].set_title(f"{title} - {sales}")
+            ax[row, col].set_ylabel(sales)
+            ax[row, col].legend(loc="upper left", fontsize="small")
+            ax[row, col].grid(True)
+
+        # Graficar para cada variante (sabor)
+        plot_variant(ax, self.variantF, "Flavoured", 0, 0)
+        plot_variant(ax, self.variantS, "Standard", 0, 1)
+        plot_variant(ax, self.variantL, "Light", 1, 0)
+        plot_variant(ax, self.variantV, "Vegan", 1, 1)
+
+        # Ajustar el diseño
+        plt.tight_layout()
+        plt.show()
+
+    def plot_everything(
+        self, brand, variant, sales="volume.sales", title="sales", plot=True
+    ):
+        """
+        Plots sales data for different supermarkets and package sizes.
+
+        Parameters:
+        self : object
+            The instance of the class containing the data and attributes.
+        brand : pd.Series
+            A boolean series to filter the data by brand.
+        variant : pd.Series
+            A boolean series to filter the data by variant.
+        sales : str, optional
+            The column name of the sales data to plot (default is "volume.sales").
+        title : str, optional
+            The title of the plot (default is "sales").
+        plot : bool, optional
+            If True, the plot will be displayed (default is True).
+
+        Returns:
+        None
+        """
+        plt.figure(figsize=(15, 10))
+
+        for supermarket, supermarket_label in zip(
+            [
+                self.supermarketA,
+                self.supermarketB,
+                self.supermarketC,
+                self.supermarketD,
+            ],
+            ["Supermarket A", "Supermarket B", "Supermarket C", "Supermarket D"],
+        ):
+            # Iterar por cada tamaño de paquete
+            for pack_size, pack_label in zip(
+                [
+                    self.pack350,
+                    self.pack500,
+                    self.pack600,
+                    self.pack700,
+                    self.pack1000,
+                ],
+                [
+                    "0 - 350 GR",
+                    "351 - 500 GR",
+                    "450 - 600 GR",
+                    "501 - 700 GR",
+                    "701 - 1000 GR",
+                ],
+            ):
+                filtered_data = self.data[brand & variant & supermarket & pack_size]
+
+                if not filtered_data.empty and filtered_data[sales].sum() > 0:
+                    plt.plot(
+                        filtered_data["date"],
+                        filtered_data[sales],
+                        label=f"{supermarket_label} - {pack_label}",
+                    )
+                plt.title(f"{title} - {sales}")
+                plt.xlabel("date")
+                plt.ylabel(sales)
+                plt.legend()
+                plt.grid(True)
+
+        if plot:
+
+            plt.show()
+
     def modelization(self, data_filtered_by_brand):
         """
         Perform modelization on the filtered data by brand.
@@ -245,7 +409,7 @@ class SalesAnalysis:
         # Create dummy variables for the supermarket column
         data_dummies = pd.get_dummies(
             data_filtered_by_brand,
-            columns=["supermarket", "variant", "pack.size"],
+            columns=["supermarket", "variant"],
             drop_first=True,
         )
 
@@ -256,10 +420,10 @@ class SalesAnalysis:
             "variant_light",
             "variant_standard",
             "variant_vegan",
-            "pack.size_351 - 500 GR",
-            "pack.size_450 - 600GR",
-            "pack.size_501 - 700 GR",
-            "pack.size_701 - 1000 GR",
+            # "pack.size_351 - 500 GR",
+            # "pack.size_450 - 600GR",
+            # "pack.size_501 - 700 GR",
+            # "pack.size_701 - 1000 GR",
         ]:
             data_dummies[col] = data_dummies[col].astype(int)
 
@@ -273,10 +437,10 @@ class SalesAnalysis:
                 "variant_light",
                 "variant_standard",
                 "variant_vegan",
-                "pack.size_351 - 500 GR",
-                "pack.size_450 - 600GR",
-                "pack.size_501 - 700 GR",
-                "pack.size_701 - 1000 GR",
+                # "pack.size_351 - 500 GR",
+                # "pack.size_450 - 600GR",
+                # "pack.size_501 - 700 GR",
+                # "pack.size_701 - 1000 GR",
             ]
         ]
 
