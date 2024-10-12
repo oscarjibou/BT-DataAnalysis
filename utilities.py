@@ -404,7 +404,10 @@ class SalesAnalysis:
             plt.show()
 
     def modelization(
-        self, data_filtered_by_brand: pd.DataFrame
+        self,
+        data_filtered_by_brand: pd.DataFrame,
+        fix_significance: bool = False,
+        interactions: int = 1,
     ) -> tuple[pd.DataFrame, sm.regression.linear_model.RegressionResultsWrapper]:
 
         # --> Añadirle la libreria (from sklearn.preprocessing import PolynomialFeatures) para hacer las interraciones entre las variables y poder hacer el modelo polinomico
@@ -476,7 +479,24 @@ class SalesAnalysis:
         # Ajustar el modelo de regresión
         model = sm.OLS(y, X_poly).fit()
 
+        if fix_significance:
+
+            for i in range(interactions):
+                p_values = model.pvalues
+                significant_vars = p_values[p_values < 0.05].index
+
+                # Seleccionar las columnas significativas en X_poly
+                X_poly_significant = X_poly[
+                    :, [i for i in range(len(p_values)) if p_values[i] < 0.05]
+                ]
+
+                # Reajustar el modelo con las variables significativas
+                model = sm.OLS(y, X_poly_significant).fit()
+
+                model_summary_significant = model.summary()
+
         # Mostrar el resumen del modelo
+
         model_summary = model.summary()
 
         return data_dummies, model
