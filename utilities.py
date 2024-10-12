@@ -4,10 +4,11 @@ import matplotlib.pyplot as plt
 import statsmodels.api as sm
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.stattools import adfuller
+from sklearn.preprocessing import PolynomialFeatures
 
 
 class SalesAnalysis:
-    def __init__(self, raw_data):
+    def __init__(self, raw_data: pd.DataFrame):
 
         # Assign the original data to a class attribute
         self.raw_data = raw_data
@@ -23,7 +24,7 @@ class SalesAnalysis:
         self.__variables__()  # update the variables after the conversion
 
         # # Convert the 'date' column to datetime format wihout the time only the date
-        # self.data["date"] = self.data["date"].dt.date
+        self.data["date"] = self.data["date"].dt.date
 
     def __variables__(self):
         # Define the conditions for the supermarkets
@@ -139,8 +140,14 @@ class SalesAnalysis:
         return monthly_data
 
     def detail_plot(
-        self, brand, supermarket, pack_size, variant, sales="volume.sales", plot=True
-    ):
+        self,
+        brand: pd.Series,
+        supermarket: pd.Series,
+        pack_size: pd.Series,
+        variant: pd.Series,
+        sales: str = "volume.sales",
+        plot: bool = True,
+    ) -> None:
 
         filtered_data = self.data[brand & supermarket & pack_size & variant]
 
@@ -152,7 +159,9 @@ class SalesAnalysis:
         if plot:
             plt.show()
 
-    def separate_plot_by_flavour(self, brand, pack_size, sales="volume.sales"):
+    def separate_plot_by_flavour(
+        self, brand: pd.Series, pack_size: pd.Series, sales: str = "volume.sales"
+    ) -> None:
         """
         Plots sales data for different flavours of a given brand across multiple supermarkets and pack sizes.
 
@@ -222,8 +231,12 @@ class SalesAnalysis:
         plt.show()
 
     def plot_everything_in_4_plots(
-        self, brand, sales="volume.sales", keepAxisX=True, keepAxisY=False
-    ):
+        self,
+        brand: pd.Series,
+        sales: str = "volume.sales",
+        keepAxisX: bool = True,
+        keepAxisY: bool = False,
+    ) -> None:
         """
         Plots sales data for different product variants across multiple supermarkets and package sizes in a 2x2 grid of subplots.
 
@@ -317,8 +330,13 @@ class SalesAnalysis:
         plt.show()
 
     def plot_everything(
-        self, brand, variant, sales="volume.sales", title="sales", plot=True
-    ):
+        self,
+        brand: pd.Series,
+        variant: pd.Series,
+        sales: str = "volume.sales",
+        title: str = "sales",
+        plot: bool = True,
+    ) -> None:
         """
         Plots sales data for different supermarkets and package sizes.
 
@@ -385,9 +403,13 @@ class SalesAnalysis:
 
             plt.show()
 
-    def modelization(self, data_filtered_by_brand):
+    def modelization(
+        self, data_filtered_by_brand: pd.DataFrame
+    ) -> tuple[pd.DataFrame, sm.regression.linear_model.RegressionResultsWrapper]:
+
+        # --> Añadirle la libreria (from sklearn.preprocessing import PolynomialFeatures) para hacer las interraciones entre las variables y poder hacer el modelo polinomico
         """
-        Perform modelization on the filtered data by brand.
+        example: data_dummies, model = sa.modelization(data[sa.brand35])
 
         This function creates dummy variables for the 'supermarket', 'variant', and 'pack.size' columns,
         converts specific columns to integer type, and then fits an Ordinary Least Squares (OLS) regression model
@@ -409,7 +431,7 @@ class SalesAnalysis:
         # Create dummy variables for the supermarket column
         data_dummies = pd.get_dummies(
             data_filtered_by_brand,
-            columns=["supermarket", "variant"],
+            columns=["supermarket", "variant", "pack.size"],
             drop_first=True,
         )
 
@@ -420,10 +442,9 @@ class SalesAnalysis:
             "variant_light",
             "variant_standard",
             "variant_vegan",
-            # "pack.size_351 - 500 GR",
-            # "pack.size_450 - 600GR",
-            # "pack.size_501 - 700 GR",
-            # "pack.size_701 - 1000 GR",
+            "pack.size_351 - 500 GR",
+            "pack.size_501 - 700 GR",
+            "pack.size_701 - 1000 GR",
         ]:
             data_dummies[col] = data_dummies[col].astype(int)
 
@@ -437,25 +458,32 @@ class SalesAnalysis:
                 "variant_light",
                 "variant_standard",
                 "variant_vegan",
-                # "pack.size_351 - 500 GR",
-                # "pack.size_450 - 600GR",
-                # "pack.size_501 - 700 GR",
-                # "pack.size_701 - 1000 GR",
+                "pack.size_351 - 500 GR",
+                "pack.size_501 - 700 GR",
+                "pack.size_701 - 1000 GR",
             ]
         ]
 
-        X = sm.add_constant(X)
-
         y = data_dummies["volume.sales"]
 
-        # Adjust the model
-        model = sm.OLS(y, X).fit()
+        # Crear interacciones usando PolynomialFeatures (grado 2 para crear términos de interacción)
+        poly = PolynomialFeatures(degree=2, interaction_only=True, include_bias=False)
+        X_poly = poly.fit_transform(X)  # Generar las interacciones
 
+        # Agregar una constante al modelo (intercepto)
+        X_poly = sm.add_constant(X_poly)
+
+        # Ajustar el modelo de regresión
+        model = sm.OLS(y, X_poly).fit()
+
+        # Mostrar el resumen del modelo
         model_summary = model.summary()
 
         return data_dummies, model
 
-    def plot_resid_ACF_PACF(self, model, lags=40):
+    def plot_resid_ACF_PACF(
+        self, model: sm.regression.linear_model.RegressionResultsWrapper, lags: int = 40
+    ) -> None:
         """
         Plots the Autocorrelation Function (ACF) and Partial Autocorrelation Function (PACF) of the residuals of a given model.
 
@@ -468,7 +496,6 @@ class SalesAnalysis:
         Returns:
         None
         """
-
         residuals = model.resid
 
         plt.figure(figsize=(10, 6))
@@ -481,7 +508,9 @@ class SalesAnalysis:
         plt.title("PACF residuals")
         plt.show()
 
-    def test_stationarity(self, data_dummies, sales="volume.sales"):
+    def test_stationarity(
+        self, data_dummies: pd.DataFrame, sales: str = "volume.sales"
+    ) -> None:
         """
         Tests the stationarity of a time series using the Augmented Dickey-Fuller (ADF) test.
         Parameters:
