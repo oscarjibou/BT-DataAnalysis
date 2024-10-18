@@ -483,7 +483,9 @@ class SalesAnalysis:
 
             for i in range(interactions):
                 p_values = model.pvalues
-                significant_vars = p_values[p_values < 0.05].index
+                significant_vars = p_values[
+                    p_values < 0.05
+                ].index  ############################### que quite solo una variable, no todas
 
                 # Seleccionar las columnas significativas en X_poly
                 X_poly_significant = X_poly[
