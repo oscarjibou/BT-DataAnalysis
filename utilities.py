@@ -4,9 +4,11 @@ import matplotlib.pyplot as plt
 import statsmodels.api as sm
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.stattools import adfuller
+from sklearn.preprocessing import PolynomialFeatures
+
 
 class SalesAnalysis:
-    def __init__(self, raw_data):
+    def __init__(self, raw_data: pd.DataFrame):
 
         # Assign the original data to a class attribute
         self.raw_data = raw_data
@@ -14,6 +16,17 @@ class SalesAnalysis:
         # CleaningData
         self.data = self.cleaning_data()
 
+        self.__variables__()
+
+        # Convert the weeks into months using the convert_weeks_to_months method
+        self.data = self.convert_weeks_to_months()
+
+        self.__variables__()  # update the variables after the conversion
+
+        # # Convert the 'date' column to datetime format wihout the time only the date
+        self.data["date"] = self.data["date"].dt.date
+
+    def __variables__(self):
         # Define the conditions for the supermarkets
         self.supermarketA = self.data["supermarket"] == "supermarket-A"
         self.supermarketB = self.data["supermarket"] == "supermarket-B"
@@ -36,12 +49,6 @@ class SalesAnalysis:
         self.brand14 = self.data["brand"] == "brand-14"
         self.brand15 = self.data["brand"] == "brand-15"
         self.brandOther = self.data["brand"] == "other"
-
-        # Convert the weeks into months using the convert_weeks_to_months method
-        self.data = self.convert_weeks_to_months()
-
-        # Convert the 'date' column to datetime format wihout the time only the date
-        self.data["date"] = self.data["date"].dt.date
 
     def cleaning_data(self):
         """
@@ -132,7 +139,29 @@ class SalesAnalysis:
 
         return monthly_data
 
-    def plot_all_separate_flavour(self, brand, sales="volume.sales"):
+    def detail_plot(
+        self,
+        brand: pd.Series,
+        supermarket: pd.Series,
+        pack_size: pd.Series,
+        variant: pd.Series,
+        sales: str = "volume.sales",
+        plot: bool = True,
+    ) -> None:
+
+        filtered_data = self.data[brand & supermarket & pack_size & variant]
+
+        plt.figure(figsize=(10, 6))
+        plt.plot(filtered_data["date"], filtered_data[sales])
+        plt.xlabel("Date")
+        plt.ylabel(sales)
+        plt.grid(True)
+        if plot:
+            plt.show()
+
+    def separate_plot_by_flavour(
+        self, brand: pd.Series, pack_size: pd.Series, sales: str = "volume.sales"
+    ) -> None:
         """
         Plots sales data for different flavours of a given brand across multiple supermarkets and pack sizes.
 
@@ -177,16 +206,10 @@ class SalesAnalysis:
                     "supermercado D",
                 ],
             ):
-                filtered_data = self.data[
-                    (self.data["brand"] == brand)
-                    & (self.data["pack.size"] == "0 - 350 GR")
-                    & flavour
-                    & supermarket
-                ]
+                filtered_data = self.data[brand & pack_size & flavour & supermarket]
                 ax[num1, num2].plot(
                     filtered_data["date"],
                     filtered_data[sales],
-                    label=f"{label} - {"0 - 350 GR"}",
                 )
 
             ax[num1, num2].set_title(
@@ -207,51 +230,189 @@ class SalesAnalysis:
         plt.tight_layout()
         plt.show()
 
-    def plot_detail_graph(self, brand, flavour, sales="volume.sales"):
+    def plot_everything_in_4_plots(
+        self,
+        brand: pd.Series,
+        sales: str = "volume.sales",
+        keepAxisX: bool = True,
+        keepAxisY: bool = False,
+    ) -> None:
         """
-        Plots a detailed graph of sales data for a specific brand and flavour across different supermarkets.
+        Plots sales data for different product variants across multiple supermarkets and package sizes in a 2x2 grid of subplots.
 
         Parameters:
-        brand (str): The brand of the product to filter the data.
-        flavour (str): The flavour of the product to filter the data.
-        sales (str, optional): The sales metric to plot. Defaults to "volume.sales".
+        -----------
+        self : object
+            The instance of the class containing the data and attributes required for plotting.
+        brand : pandas.Series
+            A boolean series used to filter the data for the specified brand.
+        sales : str, optional
+            The column name in the data representing sales figures to be plotted. Default is "volume.sales".
+        keepAxisX : bool, optional
+            If True, the x-axis will be shared among subplots. Default is True.
+        keepAxisY : bool, optional
+            If True, the y-axis will be shared among subplots. Default is False.
 
         Returns:
+        --------
         None
+            This function does not return any value. It generates and displays a plot.
+
+        Notes:
+        ------
+        - The function iterates over predefined supermarkets and package sizes to filter and plot the data.
+        - Each subplot represents sales data for a specific product variant (e.g., Flavoured, Standard, Light, Vegan).
+        - The function ensures that only non-empty data with non-zero sales are plotted.
+        - Legends, titles, and grid lines are added to each subplot for better readability.
+        - The layout of the plots is adjusted using `plt.tight_layout()` for a cleaner appearance.
         """
 
-        plt.figure(figsize=(10, 6))
+        fig, ax = plt.subplots(
+            2, 2, figsize=(15, 10), sharex=keepAxisX, sharey=keepAxisY
+        )
 
-        pack_sizes = self.data["pack.size"].unique()
-
-        for pack_size in pack_sizes:
-            for supermarket, label in zip(
+        def plot_variant(ax, variant, title, row, col):
+            # Iterar por cada supermercado
+            for supermarket, supermarket_label in zip(
                 [
                     self.supermarketA,
                     self.supermarketB,
                     self.supermarketC,
                     self.supermarketD,
-                ][
-                    "supermercado A",
-                    "supermercado B",
-                    "supermercado C",
-                    "supermercado D",
-                ]
+                ],
+                ["Supermarket A", "Supermarket B", "Supermarket C", "Supermarket D"],
             ):
+                # Iterar por cada tamaño de paquete
+                for pack_size, pack_label in zip(
+                    [
+                        self.pack350,
+                        self.pack500,
+                        self.pack600,
+                        self.pack700,
+                        self.pack1000,
+                    ],
+                    [
+                        "0 - 350 GR",
+                        "351 - 500 GR",
+                        "450 - 600 GR",
+                        "501 - 700 GR",
+                        "701 - 1000 GR",
+                    ],
+                ):
+                    filtered_data = self.data[brand & variant & supermarket & pack_size]
+                    # ax[row, col].plot(
+                    #     filtered_data["date"],
+                    #     filtered_data[sales],
+                    #     label=f"{supermarket_label} - {pack_label}",
+                    # )
 
-                filtered_data = self.data[
-                    (self.data["brand"] == brand)
-                    & (self.data["pack.size"] == pack_size)
-                    & flavour
-                    & supermarket
-                ]
+                    # Verificar si los datos no están vacíos ni tienen solo ceros en las ventas
+                    if not filtered_data.empty and filtered_data[sales].sum() > 0:
+                        ax[row, col].plot(
+                            filtered_data["date"],
+                            filtered_data[sales],
+                            label=f"{supermarket_label} - {pack_label}",
+                        )
 
-                plt.plot(filtered_data["date"], filtered_data[sales])
-                plt.show()
+            ax[row, col].set_title(f"{title} - {sales}")
+            ax[row, col].set_ylabel(sales)
+            ax[row, col].legend(loc="upper left", fontsize="small")
+            ax[row, col].grid(True)
 
-    def modelization(self, data_filtered_by_brand):
+        # Graficar para cada variante (sabor)
+        plot_variant(ax, self.variantF, "Flavoured", 0, 0)
+        plot_variant(ax, self.variantS, "Standard", 0, 1)
+        plot_variant(ax, self.variantL, "Light", 1, 0)
+        plot_variant(ax, self.variantV, "Vegan", 1, 1)
+
+        # Ajustar el diseño
+        plt.tight_layout()
+        plt.show()
+
+    def plot_everything(
+        self,
+        brand: pd.Series,
+        variant: pd.Series,
+        sales: str = "volume.sales",
+        title: str = "sales",
+        plot: bool = True,
+    ) -> None:
         """
-        Perform modelization on the filtered data by brand.
+        Plots sales data for different supermarkets and package sizes.
+
+        Parameters:
+        self : object
+            The instance of the class containing the data and attributes.
+        brand : pd.Series
+            A boolean series to filter the data by brand.
+        variant : pd.Series
+            A boolean series to filter the data by variant.
+        sales : str, optional
+            The column name of the sales data to plot (default is "volume.sales").
+        title : str, optional
+            The title of the plot (default is "sales").
+        plot : bool, optional
+            If True, the plot will be displayed (default is True).
+
+        Returns:
+        None
+        """
+        plt.figure(figsize=(15, 10))
+
+        for supermarket, supermarket_label in zip(
+            [
+                self.supermarketA,
+                self.supermarketB,
+                self.supermarketC,
+                self.supermarketD,
+            ],
+            ["Supermarket A", "Supermarket B", "Supermarket C", "Supermarket D"],
+        ):
+            # Iterar por cada tamaño de paquete
+            for pack_size, pack_label in zip(
+                [
+                    self.pack350,
+                    self.pack500,
+                    self.pack600,
+                    self.pack700,
+                    self.pack1000,
+                ],
+                [
+                    "0 - 350 GR",
+                    "351 - 500 GR",
+                    "450 - 600 GR",
+                    "501 - 700 GR",
+                    "701 - 1000 GR",
+                ],
+            ):
+                filtered_data = self.data[brand & variant & supermarket & pack_size]
+
+                if not filtered_data.empty and filtered_data[sales].sum() > 0:
+                    plt.plot(
+                        filtered_data["date"],
+                        filtered_data[sales],
+                        label=f"{supermarket_label} - {pack_label}",
+                    )
+                plt.title(f"{title} - {sales}")
+                plt.xlabel("date")
+                plt.ylabel(sales)
+                plt.legend()
+                plt.grid(True)
+
+        if plot:
+
+            plt.show()
+
+    def modelization(
+        self,
+        data_filtered_by_brand: pd.DataFrame,
+        fix_significance: bool = False,
+        interactions: int = 1,
+    ) -> tuple[pd.DataFrame, sm.regression.linear_model.RegressionResultsWrapper]:
+
+        # --> Añadirle la libreria (from sklearn.preprocessing import PolynomialFeatures) para hacer las interraciones entre las variables y poder hacer el modelo polinomico
+        """
+        example: data_dummies, model = sa.modelization(data[sa.brand35])
 
         This function creates dummy variables for the 'supermarket', 'variant', and 'pack.size' columns,
         converts specific columns to integer type, and then fits an Ordinary Least Squares (OLS) regression model
@@ -285,7 +446,6 @@ class SalesAnalysis:
             "variant_standard",
             "variant_vegan",
             "pack.size_351 - 500 GR",
-            "pack.size_450 - 600GR",
             "pack.size_501 - 700 GR",
             "pack.size_701 - 1000 GR",
         ]:
@@ -302,24 +462,127 @@ class SalesAnalysis:
                 "variant_standard",
                 "variant_vegan",
                 "pack.size_351 - 500 GR",
-                "pack.size_450 - 600GR",
                 "pack.size_501 - 700 GR",
                 "pack.size_701 - 1000 GR",
             ]
         ]
 
-        X = sm.add_constant(X)
-
         y = data_dummies["volume.sales"]
 
-        # Adjust the model
-        model = sm.OLS(y, X).fit()
+        # Crear interacciones usando PolynomialFeatures (grado 2 para crear términos de interacción)
+        poly = PolynomialFeatures(degree=2, interaction_only=True, include_bias=False)
+        X_poly = poly.fit_transform(X)  # Generar las interacciones
+
+        # Agregar una constante al modelo (intercepto)
+        X_poly = sm.add_constant(X_poly)
+
+        # Ajustar el modelo de regresión
+        model = sm.OLS(y, X_poly).fit()
+
+        if fix_significance:
+
+            for i in range(interactions):
+                p_values = model.pvalues
+                significant_vars = p_values[
+                    p_values < 0.05
+                ].index  ############################### que quite solo una variable, no todas
+
+                # Seleccionar las columnas significativas en X_poly
+                X_poly_significant = X_poly[
+                    :, [i for i in range(len(p_values)) if p_values[i] < 0.05]
+                ]
+
+                # Reajustar el modelo con las variables significativas
+                model = sm.OLS(y, X_poly_significant).fit()
+
+                model_summary_significant = model.summary()
+
+        # Mostrar el resumen del modelo
 
         model_summary = model.summary()
 
         return data_dummies, model
 
-    def plot_resid_ACF_PACF(self, model, lags=40):
+    def modelization2(
+        self,
+        data_filtered_by_brand: pd.DataFrame,
+        fix_significance: bool = False,
+        interactions: int = 1,
+    ) -> tuple[pd.DataFrame, sm.regression.linear_model.RegressionResultsWrapper]:
+
+        # Crear variables dummy para las columnas especificadas
+        data_dummies = pd.get_dummies(
+            data_filtered_by_brand,
+            columns=["supermarket", "variant", "pack.size"],
+            drop_first=True,
+        )
+
+        for col in [
+            "supermarket_supermarket-B",
+            "supermarket_supermarket-C",
+            "supermarket_supermarket-D",
+            "variant_light",
+            "variant_standard",
+            "variant_vegan",
+            "pack.size_351 - 500 GR",
+            "pack.size_501 - 700 GR",
+            "pack.size_701 - 1000 GR",
+        ]:
+            data_dummies[col] = data_dummies[col].astype(int)
+
+        X = data_dummies[
+            [
+                "unit.sales",
+                "value.sales",
+                "supermarket_supermarket-B",
+                "supermarket_supermarket-C",
+                "supermarket_supermarket-D",
+                "variant_light",
+                "variant_standard",
+                "variant_vegan",
+                "pack.size_351 - 500 GR",
+                "pack.size_501 - 700 GR",
+                "pack.size_701 - 1000 GR",
+            ]
+        ]
+
+        y = data_dummies["volume.sales"]
+
+        # Crear interacciones usando PolynomialFeatures (grado 2 para crear términos de interacción)
+        poly = PolynomialFeatures(degree=2, interaction_only=True, include_bias=False)
+        X_poly = poly.fit_transform(X)  # Generar las interacciones
+
+        # Obtener los nombres originales y las interacciones
+        feature_names = poly.get_feature_names_out(X.columns)
+
+        # Crear un DataFrame con los nombres de las variables
+        X_poly_df = pd.DataFrame(X_poly, columns=feature_names)
+
+        # Agregar una constante al modelo (intercepto)
+        X_poly_df = sm.add_constant(X_poly_df)
+
+        # Ajustar el modelo de regresión
+        model = sm.OLS(y, X_poly_df).fit()
+
+        if fix_significance:
+            for i in range(interactions):
+                p_values = model.pvalues
+                significant_vars = p_values[p_values < 0.05].index
+
+                # Seleccionar las columnas significativas en X_poly_df
+                X_poly_significant = X_poly_df[significant_vars]
+
+                # Reajustar el modelo con las variables significativas
+                model = sm.OLS(y, X_poly_significant).fit()
+
+        # Mostrar el resumen del modelo
+        model_summary = model.summary()
+
+        return data_dummies, model
+
+    def plot_resid_ACF_PACF(
+        self, model: sm.regression.linear_model.RegressionResultsWrapper, lags: int = 40
+    ) -> None:
         """
         Plots the Autocorrelation Function (ACF) and Partial Autocorrelation Function (PACF) of the residuals of a given model.
 
@@ -332,7 +595,6 @@ class SalesAnalysis:
         Returns:
         None
         """
-
         residuals = model.resid
 
         plt.figure(figsize=(10, 6))
@@ -344,9 +606,10 @@ class SalesAnalysis:
         plot_pacf(residuals, lags=lags)
         plt.title("PACF residuals")
         plt.show()
-        
 
-    def test_stationarity(self, data_dummies, sales="volume.sales"):
+    def test_stationarity(
+        self, data_dummies: pd.DataFrame, sales: str = "volume.sales"
+    ) -> None:
         """
         Tests the stationarity of a time series using the Augmented Dickey-Fuller (ADF) test.
         Parameters:
@@ -364,7 +627,7 @@ class SalesAnalysis:
         - The ADF statistic indicates if the series is stationary. If the value is very negative and less than the critical values, the series is likely stationary.
         - The p-value: If it is less than 0.05, you can reject the null hypothesis of non-stationarity, indicating that the series is stationary.
         """
-        
+
         # Dickie-Fuller's test
         adf_result = adfuller(data_dummies[sales])
 
@@ -377,71 +640,3 @@ class SalesAnalysis:
 
         """ El estadístico ADF te dice si la serie es estacionaria. Si el valor es muy negativo y menor que los valores críticos, entonces es probable que la serie sea estacionaria.
         El valor p: Si es menor a 0.05, puedes rechazar la hipótesis nula de no estacionariedad, lo que indica que la serie es estacionaria."""
-
-
-    def plot_flavours_by_brand(self, brand):
-        """
-        Dibuja cuatro gráficas de ventas de volumen por cada variante de sabor
-        para un conjunto de supermercados. Las gráficas muestran la serie de tiempo
-        de las ventas de volumen por marca y supermercado.
-
-        Parameters:
-        -----------
-        brand : str
-            La marca para la cual se deben mostrar los datos de ventas.
-
-        Returns:
-        --------
-        None
-        """
-
-        # Crear una figura con 4 subgráficas
-        fig, axs = plt.subplots(2, 2, figsize=(15, 10))
-
-        # Definir los sabores
-        flavours = [self.variantF, self.variantS, self.variantL, self.variantV]
-        flavour_names = ["Flavoured", "Standard", "Light", "Vegan"]
-
-        # Definir los supermercados
-        supermarkets = [
-            self.supermarketA,
-            self.supermarketB,
-            self.supermarketC,
-            self.supermarketD,
-        ]
-        supermarket_names = [
-            "Supermercado A",
-            "Supermercado B",
-            "Supermercado C",
-            "Supermercado D",
-        ]
-
-        # Iterar por cada sabor
-        for i, (flavour, flavour_name) in enumerate(zip(flavours, flavour_names)):
-            # Elegir el eje en la subgráfica
-            ax = axs[i // 2, i % 2]
-
-            # Iterar por cada supermercado
-            for supermarket, supermarket_name in zip(supermarkets, supermarket_names):
-                # Filtrar los datos
-                filtered_data = self.data[
-                    (self.data["brand"] == brand) & flavour & supermarket
-                ]
-
-                # Hacer el gráfico
-                ax.plot(
-                    filtered_data["date"],
-                    filtered_data["volume.sales"],
-                    label=supermarket_name,
-                )
-
-            # Configurar la subgráfica
-            ax.set_title(f"Ventas de {flavour_name}")
-            ax.set_xlabel("Fecha")
-            ax.set_ylabel("Volume Sales")
-            ax.legend()
-            ax.grid(True)
-
-        # Ajustar el diseño para que no se solapen las gráficas
-        plt.tight_layout()
-        plt.show()

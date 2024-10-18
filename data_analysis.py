@@ -2,10 +2,10 @@ from utilities import *
 
 raw_data = pd.read_excel("data/Datos_Market_copy.xlsx")
 
-sales_analysis = SalesAnalysis(raw_data)
+sa = SalesAnalysis(raw_data)
 
-data = sales_analysis.data
+data = sa.data
 
-# sales_analysis.plot_all_separate_flavour("brand-35")
+data_dummies, model = sa.modelization(data[sa.brand35], fix_significance=True)
 
-sales_analysis.plot_flavours_by_brand("brand-35")
+print(model.summary())
