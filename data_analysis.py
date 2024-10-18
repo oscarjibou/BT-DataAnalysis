@@ -6,6 +6,9 @@ sa = SalesAnalysis(raw_data)
 
 data = sa.data
 
-data_dummies, model = sa.modelization(data[sa.brand35], fix_significance=True)
+# data_dummies, model = sa.modelization(data[sa.brand35], fix_significance=True)
 
+# print(model.summary())
+
+data_dummies, model = sa.modelization_with_statsmodels(data[sa.brand35])
 print(model.summary())
