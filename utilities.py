@@ -501,6 +501,83 @@ class SalesAnalysis:
 
         return data_dummies, model
 
+    def modelization2(
+        self,
+        data_filtered_by_brand: pd.DataFrame,
+        fix_significance: bool = False,
+        interactions: int = 1,
+    ) -> tuple[pd.DataFrame, sm.regression.linear_model.RegressionResultsWrapper]:
+
+        # Crear variables dummy para las columnas especificadas
+        data_dummies = pd.get_dummies(
+            data_filtered_by_brand,
+            columns=["supermarket", "variant", "pack.size"],
+            drop_first=True,
+        )
+
+        for col in [
+            "supermarket_supermarket-B",
+            "supermarket_supermarket-C",
+            "supermarket_supermarket-D",
+            "variant_light",
+            "variant_standard",
+            "variant_vegan",
+            "pack.size_351 - 500 GR",
+            "pack.size_501 - 700 GR",
+            "pack.size_701 - 1000 GR",
+        ]:
+            data_dummies[col] = data_dummies[col].astype(int)
+
+        X = data_dummies[
+            [
+                "unit.sales",
+                "value.sales",
+                "supermarket_supermarket-B",
+                "supermarket_supermarket-C",
+                "supermarket_supermarket-D",
+                "variant_light",
+                "variant_standard",
+                "variant_vegan",
+                "pack.size_351 - 500 GR",
+                "pack.size_501 - 700 GR",
+                "pack.size_701 - 1000 GR",
+            ]
+        ]
+
+        y = data_dummies["volume.sales"]
+
+        # Crear interacciones usando PolynomialFeatures (grado 2 para crear términos de interacción)
+        poly = PolynomialFeatures(degree=2, interaction_only=True, include_bias=False)
+        X_poly = poly.fit_transform(X)  # Generar las interacciones
+
+        # Obtener los nombres originales y las interacciones
+        feature_names = poly.get_feature_names_out(X.columns)
+
+        # Crear un DataFrame con los nombres de las variables
+        X_poly_df = pd.DataFrame(X_poly, columns=feature_names)
+
+        # Agregar una constante al modelo (intercepto)
+        X_poly_df = sm.add_constant(X_poly_df)
+
+        # Ajustar el modelo de regresión
+        model = sm.OLS(y, X_poly_df).fit()
+
+        if fix_significance:
+            for i in range(interactions):
+                p_values = model.pvalues
+                significant_vars = p_values[p_values < 0.05].index
+
+                # Seleccionar las columnas significativas en X_poly_df
+                X_poly_significant = X_poly_df[significant_vars]
+
+                # Reajustar el modelo con las variables significativas
+                model = sm.OLS(y, X_poly_significant).fit()
+
+        # Mostrar el resumen del modelo
+        model_summary = model.summary()
+
+        return data_dummies, model
+
     def plot_resid_ACF_PACF(
         self, model: sm.regression.linear_model.RegressionResultsWrapper, lags: int = 40
     ) -> None:
