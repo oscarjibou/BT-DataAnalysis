@@ -10,8 +10,12 @@ from sklearn.preprocessing import PolynomialFeatures
 from sklearn.feature_selection import RFE
 from sklearn.linear_model import LinearRegression
 from itertools import product
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.stats.diagnostic import acorr_ljungbox
+from pmdarima.arima import auto_arima
 
 
+#################################### SALES ANALYSIS CLASS ####################################
 class SalesAnalysis:
     def __init__(self, raw_data: pd.DataFrame):
 
@@ -55,94 +59,7 @@ class SalesAnalysis:
         self.brand15 = self.data["brand"] == "brand-15"
         self.brandOther = self.data["brand"] == "other"
 
-    def cleaning_data(self):
-        """
-        Cleans the raw data by replacing certain brand names with 'other'.
-
-        This method performs the following steps:
-        1. Creates a copy of the raw data.
-        2. Iterates through the 'brand' column of the data.
-        3. Replaces any brand name that is not 'brand-15', 'brand-14', or 'brand-35' with 'other'.
-
-        Returns:
-            pandas.DataFrame: The cleaned data with specified brand names replaced.
-        """
-
-        data = self.raw_data.copy()
-        # data.set_index("date", inplace=True)
-
-        for i in data["brand"]:
-            if i != "brand-15" and i != "brand-14" and i != "brand-35":
-                # change the name
-                # test_data["brand"].replace(i, "other", inplace=True)
-                data["brand"].replace({i: "other"}, inplace=True)
-
-        return data
-
-    def convert_weeks_to_months(self):
-        """
-        Converts weekly sales data to monthly aggregated data.
-
-        This method processes the sales data for different supermarkets, variants, pack sizes, and brands,
-        aggregating the data on a monthly basis. The aggregation includes summing up the sales volumes, unit sales,
-        and value sales, while keeping the first occurrence of supermarket, variant, pack size, and brand for each month.
-
-        Returns:
-            pd.DataFrame: A DataFrame containing the monthly aggregated sales data.
-        """
-
-        monthly_data = pd.DataFrame()
-
-        for supermarket in [
-            self.supermarketA,
-            self.supermarketB,
-            self.supermarketC,
-            self.supermarketD,
-        ]:
-            for variant in [self.variantF, self.variantS, self.variantL, self.variantV]:
-                for pack_size in [
-                    self.pack350,
-                    self.pack500,
-                    self.pack600,
-                    self.pack700,
-                    self.pack1000,
-                ]:
-                    for brand in [
-                        self.brand35,
-                        self.brand14,
-                        self.brand15,
-                        self.brandOther,
-                    ]:
-                        filtered_data = self.data[
-                            supermarket & variant & pack_size & brand
-                        ]
-
-                        # filtered_data = filtered_data.groupby(
-                        #     pd.Grouper(key="date", freq="M")
-                        # ).sum()
-
-                        filtered_data = filtered_data.groupby(
-                            pd.Grouper(
-                                key="date",
-                                freq="M",
-                            )
-                        ).agg(
-                            {
-                                "volume.sales": "sum",
-                                "unit.sales": "sum",
-                                "value.sales": "sum",
-                                "supermarket": "first",
-                                "variant": "first",
-                                "pack.size": "first",
-                                "brand": "first",
-                            }
-                        )
-
-                        filtered_data.reset_index(inplace=True)
-
-                        monthly_data = pd.concat([monthly_data, filtered_data])
-
-        return monthly_data
+    #################################### DESCRIPTIVE ANALYSIS (GRAPHS) ####################################
 
     def detail_plot(
         self,
@@ -153,6 +70,9 @@ class SalesAnalysis:
         sales: str = "volume.sales",
         plot: bool = True,
     ) -> None:
+        """
+        Applied: sa.detail_plot(sa.brand35, sa.supermarketA, sa.pack350, sa.variantF)
+        """
 
         filtered_data = self.data[brand & supermarket & pack_size & variant]
 
@@ -181,7 +101,9 @@ class SalesAnalysis:
         --------
         None
             This function does not return any value. It generates and displays a plot.
-
+        --------
+        Applied: sa.separate_plot_by_flavour(sa.brand35, sa.pack350)
+        --------
         Notes:
         ------
         - The function creates a 2x2 subplot grid where each subplot represents sales data for a different flavour variant.
@@ -257,7 +179,9 @@ class SalesAnalysis:
             If True, the x-axis will be shared among subplots. Default is True.
         keepAxisY : bool, optional
             If True, the y-axis will be shared among subplots. Default is False.
-
+        --------
+        Applied: sa.plot_everything_in_4_plots(sa.brand35)
+        --------
         Returns:
         --------
         None
@@ -358,7 +282,9 @@ class SalesAnalysis:
             The title of the plot (default is "sales").
         plot : bool, optional
             If True, the plot will be displayed (default is True).
-
+        --------
+        Applied: sa.plot_everything(sa.brand35, sa.variantF)
+        --------
         Returns:
         None
         """
@@ -408,33 +334,135 @@ class SalesAnalysis:
 
             plt.show()
 
+    def plot_resid_ACF_PACF(self, residues: pd.Series, lags: int = 40) -> None:
+        """
+        Plots the Autocorrelation Function (ACF) and Partial Autocorrelation Function (PACF) of the residuals of a given model.
+
+        Parameters:
+        model : statsmodels object
+            The fitted model from which residuals are to be plotted.
+        lags : int, optional
+            The number of lags to include in the ACF and PACF plots (default is 40).
+        --------
+        Returns:
+        None
+        --------
+        Applied:
+        sa.plot_resid_ACF_PACF(model)
+        """
+        ax, fig = plt.subplots(2, 1, figsize=(10, 12))
+
+        plot_acf(residues, lags=lags, ax=fig[0])
+        fig[0].set_title("ACF residuals")
+
+        plot_pacf(residues, lags=lags, ax=fig[1])
+        fig[1].set_title("PACF residuals")
+
+        plt.show()
+
+    #################################### MODELIZATION ####################################
+
+    def modelization(
+        self,
+        data_filtered_by_brand: pd.DataFrame,
+        interactions_deleted: list = [],
+    ) -> sm.regression.linear_model.RegressionResultsWrapper:
+        """
+        Selects and fits a linear regression model on the provided data, creating interaction terms
+        between numeric and categorical variables, as well as between categorical variables.
+        Parameters:
+        -----------
+        data_filtered_by_brand : pd.DataFrame
+            The input DataFrame filtered by brand, containing sales data and other features.
+        interactions_deleted : list, optional
+            A list of interaction terms to exclude from the model. Default is an empty list.
+        Returns:
+        --------
+        sm.regression.linear_model.RegressionResultsWrapper
+            The fitted linear regression model.
+        --------
+        Applied:
+        sa.modelization(data[sa.brand35], sa.__interactions_delected_brand35__())
+        --------
+        Notes:
+        ------
+        - The function renames certain columns to remove problematic characters.
+        - Dummy variables are created for categorical columns, and interaction terms are generated.
+        - The formula for the regression model includes all variables except 'volume_sales' and
+          those specified in `interactions_deleted`.
+        """
+
+        data_filtered_by_brand.rename(
+            columns={
+                "value.sales": "value_sales",
+                "unit.sales": "unit_sales",
+                "volume.sales": "volume_sales",
+                "pack.size": "pack_size",
+            },
+            inplace=True,
+        )
+
+        df_dummies = pd.get_dummies(
+            data_filtered_by_brand.drop(
+                columns=["date", "brand"]
+            ),  # exclude the 'date' and 'brand' columns
+            columns=["supermarket", "variant", "pack_size"],
+            drop_first=True,  # drop the first dummy variable to avoid multicollinearity (only k-1 dummies needed)
+        )
+
+        # Rename columns to remove spaces and hyphens for compatibility with patsy
+        df_dummies.columns = df_dummies.columns.str.replace(" ", "_").str.replace(
+            "-", "_"
+        )
+
+        ###INTERACTIONS
+        # between numeric and dummy variables
+        dummy_vars = [
+            col
+            for col in df_dummies.columns
+            if col.startswith(("supermarket", "variant", "pack_size"))
+        ]
+
+        numeric_vars = ["unit_sales", "value_sales"]
+
+        for num_var, dummy_var in product(numeric_vars, dummy_vars):
+            interaction_name = f"{num_var}:{dummy_var}"
+            df_dummies[interaction_name] = df_dummies[num_var] * df_dummies[dummy_var]
+
+        # between dummy variables
+        for dummy_var1, dummy_var2 in product(dummy_vars, repeat=2):
+            if dummy_var1 < dummy_var2:  # Para evitar duplicar interacciones
+                interaction_name = f"{dummy_var1}:{dummy_var2}"
+                df_dummies[interaction_name] = (
+                    df_dummies[dummy_var1] * df_dummies[dummy_var2]
+                )
+
+        ### INTERACTIONS  and FORMULA
+        independent_vars = " + ".join(
+            [
+                col
+                for col in df_dummies.columns
+                if col
+                not in [
+                    "volume_sales",
+                    *interactions_deleted,  # add * unpacks the tuple interactions_deleted to the list of elements with volume_sales
+                ]
+            ]
+        )
+
+        formula = f"volume_sales ~ {independent_vars} "
+
+        ###MODEL
+        model = smf.ols(formula=formula, data=df_dummies).fit()
+
+        return model
+
     def modelization_draw1(
         self,
         data_filtered_by_brand: pd.DataFrame,
         fix_significance: bool = False,
         interactions: int = 1,
     ) -> tuple[pd.DataFrame, sm.regression.linear_model.RegressionResultsWrapper]:
-
-        # --> Añadirle la libreria (from sklearn.preprocessing import PolynomialFeatures) para hacer las interraciones entre las variables y poder hacer el modelo polinomico
-        """
-        example: data_dummies, model = sa.modelization(data[sa.brand35])
-
-        This function creates dummy variables for the 'supermarket', 'variant', and 'pack.size' columns,
-        converts specific columns to integer type, and then fits an Ordinary Least Squares (OLS) regression model
-        using the specified features to predict 'volume.sales'.
-
-        Parameters:
-        -----------
-        data_filtered_by_brand : pandas.DataFrame
-            The input DataFrame containing the filtered data by brand.
-
-        Returns:
-        --------
-        data_dummies : pandas.DataFrame
-            The DataFrame with dummy variables created and specific columns converted to integer type.
-        model : statsmodels.regression.linear_model.RegressionResultsWrapper
-            The fitted OLS regression model.
-        """
 
         # Create dummy variables for the supermarket column
         data_dummies = pd.get_dummies(
@@ -567,123 +595,69 @@ class SalesAnalysis:
 
         return final_model
 
-    def modelization(
+    def ARIMA(
         self,
-        data_filtered_by_brand: pd.DataFrame,
-        interactions_deleted: list = [],
-    ) -> sm.regression.linear_model.RegressionResultsWrapper:
+        residues: pd.Series,
+        model_chosen: tuple = (1, 1, 0),
+        diff_need_for_residues: bool = False,
+    ):
         """
-        Selects and fits a linear regression model on the provided data, creating interaction terms
-        between numeric and categorical variables, as well as between categorical variables.
-        Parameters:
-        -----------
-        data_filtered_by_brand : pd.DataFrame
-            The input DataFrame filtered by brand, containing sales data and other features.
-        interactions_deleted : list, optional
-            A list of interaction terms to exclude from the model. Default is an empty list.
-        Returns:
-        --------
-        sm.regression.linear_model.RegressionResultsWrapper
-            The fitted linear regression model.
-        Notes:
-        ------
-        - The function renames certain columns to remove problematic characters.
-        - Dummy variables are created for categorical columns, and interaction terms are generated.
-        - The formula for the regression model includes all variables except 'volume_sales' and
-          those specified in `interactions_deleted`.
+        Input: sa.ARIMA(residues, model_chosen=(1, 1, 0))
         """
 
-        data_filtered_by_brand.rename(
-            columns={
-                "value.sales": "value_sales",
-                "unit.sales": "unit_sales",
-                "volume.sales": "volume_sales",
-                "pack.size": "pack_size",
-            },
-            inplace=True,
-        )
+        if diff_need_for_residues:
+            residues = residues.diff().dropna()
 
-        df_dummies = pd.get_dummies(
-            data_filtered_by_brand.drop(
-                columns=["date", "brand"]
-            ),  # exclude the 'date' and 'brand' columns
-            columns=["supermarket", "variant", "pack_size"],
-            drop_first=True,
-        )
+        model_arima = ARIMA(residues, order=model_chosen).fit()
 
-        # Rename columns to remove spaces and hyphens for compatibility with patsy
-        df_dummies.columns = df_dummies.columns.str.replace(" ", "_").str.replace(
-            "-", "_"
-        )
+        return model_arima
 
-        ###INTERACTIONS
-        # between numeric and dummy variables
-        dummy_vars = [
-            col
-            for col in df_dummies.columns
-            if col.startswith(("supermarket", "variant", "pack_size"))
-        ]
-
-        numeric_vars = ["unit_sales", "value_sales"]
-
-        for num_var, dummy_var in product(numeric_vars, dummy_vars):
-            interaction_name = f"{num_var}:{dummy_var}"
-            df_dummies[interaction_name] = df_dummies[num_var] * df_dummies[dummy_var]
-
-        # between dummy variables
-        for dummy_var1, dummy_var2 in product(dummy_vars, repeat=2):
-            if dummy_var1 < dummy_var2:  # Para evitar duplicar interacciones
-                interaction_name = f"{dummy_var1}:{dummy_var2}"
-                df_dummies[interaction_name] = (
-                    df_dummies[dummy_var1] * df_dummies[dummy_var2]
-                )
-
-        ### INTERACTIONS  and FORMULA
-        independent_vars = " + ".join(
-            [
-                col
-                for col in df_dummies.columns
-                if col
-                not in [
-                    "volume_sales",
-                    *interactions_deleted,  # add * unpacks the tuple interactions_deleted to the list of elements with volume_sales
-                ]
-            ]
-        )
-
-        formula = f"volume_sales ~ {independent_vars} "
-
-        ###MODEL
-        model = smf.ols(formula=formula, data=df_dummies).fit()
-
-        return model
-
-    def plot_resid_ACF_PACF(
-        self, model: sm.regression.linear_model.RegressionResultsWrapper, lags: int = 40
-    ) -> None:
+    def ARIMAX(
+        self,
+        endog: pd.Series = None,
+        exog: pd.Series = None,
+        model_chosen: tuple = (1, 1, 0),
+    ):
         """
-        Plots the Autocorrelation Function (ACF) and Partial Autocorrelation Function (PACF) of the residuals of a given model.
-
-        Parameters:
-        model : statsmodels object
-            The fitted model from which residuals are to be plotted.
-        lags : int, optional
-            The number of lags to include in the ACF and PACF plots (default is 40).
-
-        Returns:
-        None
+        Input: sa.ARIMAX(data_dummies["volume.sales"], data_dummies["value.sales"])
         """
-        residuals = model.resid
 
-        plt.figure(figsize=(10, 6))
-        plot_acf(residuals, lags=lags)
-        plt.title("ACF residuals")
-        plt.show()
+        if exog is None:
+            exog = self.data["value.sales"]
 
-        plt.figure(figsize=(10, 6))
-        plot_pacf(residuals, lags=lags)
-        plt.title("PACF residuals")
-        plt.show()
+        if endog is None:
+            endog = self.data["volume.sales"]
+
+        model_arimax = ARIMA(endog, exog=exog, order=model_chosen).fit()
+
+        return model_arimax
+
+    def autoArima(
+        self,
+        endog: pd.Series = None,
+        exog: pd.Series = None,
+        seasonal: bool = False,
+    ):
+
+        if exog is None:
+            exog = self.data["value.sales"]
+
+        if endog is None:
+            endog = self.data["volume.sales"]
+
+        model_auto_arima = auto_arima(
+            endog,
+            exog,
+            seasonal=seasonal,
+            stepwise=True,
+            trace=True,
+            error_action="ignore",
+            suppress_warnings=True,
+        )
+
+        return model_auto_arima
+
+    #################################### TESTS ####################################
 
     def test_stationarity(
         self, data_dummies: pd.DataFrame, sales: str = "volume.sales"
@@ -696,6 +670,9 @@ class SalesAnalysis:
             The dataframe containing the time series data.
         sales : str, optional
             The column name of the time series to be tested. Default is "volume.sales".
+        --------
+        Applied: sa.test_stationarity(data)
+        --------
         Returns:
         --------
         None
@@ -718,6 +695,109 @@ class SalesAnalysis:
 
         """ El estadístico ADF te dice si la serie es estacionaria. Si el valor es muy negativo y menor que los valores críticos, entonces es probable que la serie sea estacionaria.
         El valor p: Si es menor a 0.05, puedes rechazar la hipótesis nula de no estacionariedad, lo que indica que la serie es estacionaria."""
+
+    def test_correlation_residues(
+        self, residues: pd.Series, lags_ACF_PACF: int = 40, lags_ljungbox: int = 10
+    ) -> None:
+        """
+        Check the correlation between the residues of the model seeing the ACF and PACF plots. Anyways the Ljung-Box test is a  way to check the correlation between the residues. If the p-value is less than 0.05, then the residues are correlated and the model is not good.
+        """
+
+        self.plot_resid_ACF_PACF(residues, lags=lags_ACF_PACF)
+        ljung_box_test = acorr_ljungbox(residues, lags=[lags_ljungbox])
+
+        return ljung_box_test
+
+    #################################### UTILITIES ####################################
+
+    def cleaning_data(self):
+        """
+        Cleans the raw data by replacing certain brand names with 'other'.
+
+        This method performs the following steps:
+        1. Creates a copy of the raw data.
+        2. Iterates through the 'brand' column of the data.
+        3. Replaces any brand name that is not 'brand-15', 'brand-14', or 'brand-35' with 'other'.
+
+        Returns:
+            pandas.DataFrame: The cleaned data with specified brand names replaced.
+        """
+
+        data = self.raw_data.copy()
+        # data.set_index("date", inplace=True)
+
+        for i in data["brand"]:
+            if i != "brand-15" and i != "brand-14" and i != "brand-35":
+                # change the name
+                # test_data["brand"].replace(i, "other", inplace=True)
+                data["brand"].replace({i: "other"}, inplace=True)
+
+        return data
+
+    def convert_weeks_to_months(self):
+        """
+        Converts weekly sales data to monthly aggregated data.
+
+        This method processes the sales data for different supermarkets, variants, pack sizes, and brands,
+        aggregating the data on a monthly basis. The aggregation includes summing up the sales volumes, unit sales,
+        and value sales, while keeping the first occurrence of supermarket, variant, pack size, and brand for each month.
+
+        Returns:
+            pd.DataFrame: A DataFrame containing the monthly aggregated sales data.
+        """
+
+        monthly_data = pd.DataFrame()
+
+        for supermarket in [
+            self.supermarketA,
+            self.supermarketB,
+            self.supermarketC,
+            self.supermarketD,
+        ]:
+            for variant in [self.variantF, self.variantS, self.variantL, self.variantV]:
+                for pack_size in [
+                    self.pack350,
+                    self.pack500,
+                    self.pack600,
+                    self.pack700,
+                    self.pack1000,
+                ]:
+                    for brand in [
+                        self.brand35,
+                        self.brand14,
+                        self.brand15,
+                        self.brandOther,
+                    ]:
+                        filtered_data = self.data[
+                            supermarket & variant & pack_size & brand
+                        ]
+
+                        # filtered_data = filtered_data.groupby(
+                        #     pd.Grouper(key="date", freq="M")
+                        # ).sum()
+
+                        filtered_data = filtered_data.groupby(
+                            pd.Grouper(
+                                key="date",
+                                freq="M",
+                            )
+                        ).agg(
+                            {
+                                "volume.sales": "sum",
+                                "unit.sales": "sum",
+                                "value.sales": "sum",
+                                "supermarket": "first",
+                                "variant": "first",
+                                "pack.size": "first",
+                                "brand": "first",
+                            }
+                        )
+
+                        filtered_data.reset_index(inplace=True)
+
+                        monthly_data = pd.concat([monthly_data, filtered_data])
+
+        return monthly_data
 
     def __interactions_delected_brand35__(self) -> list:
         """
