@@ -651,7 +651,7 @@ class SalesAnalysis:
             ]
         )
 
-        formula = f"volume_sales ~ {independent_vars}"
+        formula = f"volume_sales ~ {independent_vars} "
 
         ###MODEL
         model = smf.ols(formula=formula, data=df_dummies).fit()
