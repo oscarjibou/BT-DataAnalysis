@@ -6,6 +6,8 @@ sa = SalesAnalysis(raw_data)
 
 data = sa.data
 
-data_dummies, model = sa.modelization(data[sa.brand35], fix_significance=True)
+modelo_brand35 = sa.modelization(
+    data[sa.brand35], sa.__interactions_delected_brand35__()
+)
 
-print(model.summary())
+print(modelo_brand35.summary())
