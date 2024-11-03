@@ -1,11 +1,15 @@
 import pandas as pd
 import numpy as np
+import patsy
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
+from sklearn.feature_selection import RFE
+from sklearn.linear_model import LinearRegression
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.stattools import adfuller
 from sklearn.preprocessing import PolynomialFeatures
+from itertools import product
 
 
 class SalesAnalysis:
@@ -404,7 +408,7 @@ class SalesAnalysis:
 
             plt.show()
 
-    def modelization(
+    def modelization_draw1(
         self,
         data_filtered_by_brand: pd.DataFrame,
         fix_significance: bool = False,
@@ -504,59 +508,155 @@ class SalesAnalysis:
 
         return data_dummies, model
 
-    def modelization_with_statsmodels(
+    def modelization_draw2(
         self, data_filtered_by_brand: pd.DataFrame
     ) -> tuple[pd.DataFrame, sm.regression.linear_model.RegressionResultsWrapper]:
 
-        data_filtered = data_filtered_by_brand.rename(
-            columns=lambda x: x.replace(".", "_")
+        data_filtered_by_brand.rename(
+            columns={
+                "value.sales": "value_sales",
+                "unit.sales": "unit_sales",
+                "volume.sales": "volume_sales",
+                "pack.size": "pack_size",
+            },
+            inplace=True,
+        )
+        formule = "volume_sales ~ (unit_sales + value_sales + C(supermarket) + C(variant) + C(pack_size)) ** 2"
+
+        modelo = smf.ols(
+            formula=self.formula_larga(), data=data_filtered_by_brand
+        ).fit()
+
+        return data_filtered_by_brand, modelo
+
+    def modelization_draw3(
+        self, data_filtered_by_brand: pd.DataFrame
+    ) -> sm.regression.linear_model.RegressionResultsWrapper:
+
+        data_filtered_by_brand.rename(
+            columns={
+                "value.sales": "value_sales",
+                "unit.sales": "unit_sales",
+                "volume.sales": "volume_sales",
+                "pack.size": "pack_size",
+            },
+            inplace=True,
         )
 
-        data_dummies = pd.get_dummies(
-            data_filtered,
+        formula = "volume_sales ~ (unit_sales + value_sales + C(supermarket) + C(variant) + C(pack_size)) ** 2"
+
+        # Paso 2: Usa patsy para crear la matriz de diseño (X) y el vector de salida (y)
+        y, X = patsy.dmatrices(
+            formula, data=data_filtered_by_brand, return_type="dataframe"
+        )
+
+        # Paso 3: Inicializa un modelo de regresión lineal de sklearn
+        model = LinearRegression()
+
+        # Paso 4: Configura RFE para seleccionar el número deseado de características
+        # En este caso, ajustaremos el modelo para seleccionar, por ejemplo, las 10 características más importantes
+        selector = RFE(model, n_features_to_select=30, step=1)
+        selector = selector.fit(X, y.values.ravel())
+
+        # Paso 5: Filtrar las características seleccionadas
+        selected_features = X.columns[selector.support_]
+
+        # Paso 6: Crear un nuevo modelo en statsmodels solo con las características seleccionadas
+        X_selected = X[selected_features]
+        final_model = sm.OLS(y, X_selected).fit()
+
+        return final_model
+
+    def modelization(
+        self,
+        data_filtered_by_brand: pd.DataFrame,
+        interactions_deleted: list = [],
+    ) -> sm.regression.linear_model.RegressionResultsWrapper:
+        """
+        Selects and fits a linear regression model on the provided data, creating interaction terms
+        between numeric and categorical variables, as well as between categorical variables.
+        Parameters:
+        -----------
+        data_filtered_by_brand : pd.DataFrame
+            The input DataFrame filtered by brand, containing sales data and other features.
+        interactions_deleted : list, optional
+            A list of interaction terms to exclude from the model. Default is an empty list.
+        Returns:
+        --------
+        sm.regression.linear_model.RegressionResultsWrapper
+            The fitted linear regression model.
+        Notes:
+        ------
+        - The function renames certain columns to remove problematic characters.
+        - Dummy variables are created for categorical columns, and interaction terms are generated.
+        - The formula for the regression model includes all variables except 'volume_sales' and
+          those specified in `interactions_deleted`.
+        """
+
+        data_filtered_by_brand.rename(
+            columns={
+                "value.sales": "value_sales",
+                "unit.sales": "unit_sales",
+                "volume.sales": "volume_sales",
+                "pack.size": "pack_size",
+            },
+            inplace=True,
+        )
+
+        df_dummies = pd.get_dummies(
+            data_filtered_by_brand.drop(
+                columns=["date", "brand"]
+            ),  # exclude the 'date' and 'brand' columns
             columns=["supermarket", "variant", "pack_size"],
             drop_first=True,
         )
 
-        # data_dummies.columns = (
-        #     data_dummies.columns.str.replace("-", "_")
-        #     .str.replace(" ", "_")
-        #     .str.replace(".", "_")
-        # )
+        # Rename columns to remove spaces and hyphens for compatibility with patsy
+        df_dummies.columns = df_dummies.columns.str.replace(" ", "_").str.replace(
+            "-", "_"
+        )
 
-        # # Definir la fórmula automáticamente sin incluir 'brand' ya que es constante tras el filtrado
-        # predictors = data_dummies.columns.difference(
-        #     ["volume_sales", "date", "unit_sales", "value_sales", "brand"]
-        # )
-        # formula = "volume_sales ~ " + " + ".join(predictors)
+        ###INTERACTIONS
+        # between numeric and dummy variables
+        dummy_vars = [
+            col
+            for col in df_dummies.columns
+            if col.startswith(("supermarket", "variant", "pack_size"))
+        ]
 
-        # formula2 = (
-        #     "volume.sales ~ unit.sales + value.sales + "
-        #     "supermarket_supermarket-B + supermarket_supermarket-C + supermarket_supermarket-D + "
-        #     "variant_light + variant_standard + variant_vegan + "
-        #     "pack.size_351 - 500 GR + pack.size_450 - 600GR + pack.size_501 - 700 GR + pack.size_701 - 1000 GR"
-        # )
+        numeric_vars = ["unit_sales", "value_sales"]
 
-        variables_independientes = " + ".join(
+        for num_var, dummy_var in product(numeric_vars, dummy_vars):
+            interaction_name = f"{num_var}:{dummy_var}"
+            df_dummies[interaction_name] = df_dummies[num_var] * df_dummies[dummy_var]
+
+        # between dummy variables
+        for dummy_var1, dummy_var2 in product(dummy_vars, repeat=2):
+            if dummy_var1 < dummy_var2:  # Para evitar duplicar interacciones
+                interaction_name = f"{dummy_var1}:{dummy_var2}"
+                df_dummies[interaction_name] = (
+                    df_dummies[dummy_var1] * df_dummies[dummy_var2]
+                )
+
+        ### INTERACTIONS  and FORMULA
+        independent_vars = " + ".join(
             [
                 col
-                for col in data_dummies.columns
-                if col not in ["volume_sales", "date", "brand"]
+                for col in df_dummies.columns
+                if col
+                not in [
+                    "volume_sales",
+                    *interactions_deleted,  # add * unpacks the tuple interactions_deleted to the list of elements with volume_sales
+                ]
             ]
         )
-        formula3 = f"volume_sales ~ {variables_independientes}"
 
-        # print(formula, "#######", predictors)
+        formula = f"volume_sales ~ {independent_vars}"
 
-        model = smf.ols(formula=formula3, data=data_dummies).fit()
+        ###MODEL
+        model = smf.ols(formula=formula, data=df_dummies).fit()
 
-        # # Extraer los coeficientes del modelo junto con la constante
-        # coefficients = model.params.reset_index()
-        # coefficients.columns = ["Variable", "Coeficiente"]
-
-        # # print(coefficients)
-
-        return data_dummies, model
+        return model
 
     def plot_resid_ACF_PACF(
         self, model: sm.regression.linear_model.RegressionResultsWrapper, lags: int = 40
@@ -618,3 +718,62 @@ class SalesAnalysis:
 
         """ El estadístico ADF te dice si la serie es estacionaria. Si el valor es muy negativo y menor que los valores críticos, entonces es probable que la serie sea estacionaria.
         El valor p: Si es menor a 0.05, puedes rechazar la hipótesis nula de no estacionariedad, lo que indica que la serie es estacionaria."""
+
+    def __interactions_delected_brand35__(self) -> list:
+        """
+        This method returns a list of interactions that have been deleted for brand 35.
+
+        Returns:
+            list: interactions deleted for brand 35 in the modelization_selector2 method
+        """
+
+        interactions_deleted = [
+            "pack_size_701___1000_GR:variant_vegan",
+            "value_sales:pack_size_501___700_GR",
+            "value_sales:supermarket_supermarket_D",
+            "supermarket_supermarket_C:supermarket_supermarket_D",
+            "pack_size_501___700_GR:variant_standard",
+            "supermarket_supermarket_C:variant_vegan",
+            "value_sales:pack_size_351___500_GR",
+            "supermarket_supermarket_D:variant_standard",
+            "pack_size_701___1000_GR",
+            "pack_size_351___500_GR:supermarket_supermarket_B",
+            "pack_size_351___500_GR:pack_size_701___1000_GR",
+            "pack_size_351___500_GR:pack_size_501___700_GR",
+            "pack_size_501___700_GR:pack_size_701___1000_GR",
+            "supermarket_supermarket_B:supermarket_supermarket_C",
+            "pack_size_501___700_GR:supermarket_supermarket_C",
+            "pack_size_701___1000_GR:variant_standard",
+            "pack_size_701___1000_GR:supermarket_supermarket_C",
+            "variant_standard:variant_vegan",
+            "variant_vegan",
+            "pack_size_501___700_GR:supermarket_supermarket_B",
+            "pack_size_701___1000_GR:supermarket_supermarket_D",
+            "pack_size_501___700_GR:variant_vegan",
+            "supermarket_supermarket_B:variant_vegan",
+            "variant_light",
+            "pack_size_351___500_GR:variant_vegan",
+            "supermarket_supermarket_B:supermarket_supermarket_D",
+            "supermarket_supermarket_B:variant_light",
+            "pack_size_701___1000_GR:variant_light",
+            "pack_size_351___500_GR:supermarket_supermarket_C",
+            "supermarket_supermarket_B:variant_standard",
+            "pack_size_701___1000_GR:supermarket_supermarket_B",
+            "supermarket_supermarket_C:variant_light",
+            "pack_size_351___500_GR:variant_light",
+            "supermarket_supermarket_D:variant_vegan",
+            "supermarket_supermarket_D",
+            "supermarket_supermarket_D:variant_light",
+            "pack_size_501___700_GR:variant_light",
+            "pack_size_501___700_GR:supermarket_supermarket_D",
+            "pack_size_501___700_GR",
+            "variant_light:variant_vegan",
+            "pack_size_351___500_GR:supermarket_supermarket_D",
+            "variant_light:variant_standard",
+            "unit_sales:variant_standard",
+            "supermarket_supermarket_B",
+            # "pack_size_351___500_GR",
+            # "pack_size_351___500_GR:variant_standard",
+        ]
+
+        return interactions_deleted
