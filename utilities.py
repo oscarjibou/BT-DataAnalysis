@@ -4,11 +4,11 @@ import patsy
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
-from sklearn.feature_selection import RFE
-from sklearn.linear_model import LinearRegression
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.stattools import adfuller
 from sklearn.preprocessing import PolynomialFeatures
+from sklearn.feature_selection import RFE
+from sklearn.linear_model import LinearRegression
 from itertools import product
 
 
