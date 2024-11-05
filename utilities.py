@@ -12,7 +12,8 @@ from sklearn.linear_model import LinearRegression
 from itertools import product
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.stats.diagnostic import acorr_ljungbox
-from pmdarima.arima import auto_arima
+
+# from pmdarima.arima import auto_arima
 
 
 #################################### SALES ANALYSIS CLASS ####################################
@@ -632,30 +633,30 @@ class SalesAnalysis:
 
         return model_arimax
 
-    def autoArima(
-        self,
-        endog: pd.Series = None,
-        exog: pd.Series = None,
-        seasonal: bool = False,
-    ):
+    # def autoArima(
+    #     self,
+    #     endog: pd.Series = None,
+    #     exog: pd.Series = None,
+    #     seasonal: bool = False,
+    # ):
 
-        if exog is None:
-            exog = self.data["value.sales"]
+    #     if exog is None:
+    #         exog = self.data["value.sales"]
 
-        if endog is None:
-            endog = self.data["volume.sales"]
+    #     if endog is None:
+    #         endog = self.data["volume.sales"]
 
-        model_auto_arima = auto_arima(
-            endog,
-            exog,
-            seasonal=seasonal,
-            stepwise=True,
-            trace=True,
-            error_action="ignore",
-            suppress_warnings=True,
-        )
+    #     model_auto_arima = auto_arima(
+    #         endog,
+    #         exog,
+    #         seasonal=seasonal,
+    #         stepwise=True,
+    #         trace=True,
+    #         error_action="ignore",
+    #         suppress_warnings=True,
+    #     )
 
-        return model_auto_arima
+    #     return model_auto_arima
 
     #################################### TESTS ####################################
 
@@ -852,8 +853,8 @@ class SalesAnalysis:
             "variant_light:variant_standard",
             "unit_sales:variant_standard",
             "supermarket_supermarket_B",
-            # "pack_size_351___500_GR",
-            # "pack_size_351___500_GR:variant_standard",
+            "pack_size_351___500_GR",
+            "pack_size_351___500_GR:variant_standard",
         ]
 
         return interactions_deleted
