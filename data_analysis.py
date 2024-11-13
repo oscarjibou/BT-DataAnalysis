@@ -6,9 +6,13 @@ sa = SalesAnalysis(raw_data)
 
 data = sa.data
 
-model_brand35 = sa.modelization(
-    data[sa.brand35], sa.__interactions_delected_brand35__()
+(model_brand35, data_model) = sa.modelization_with_backward_elimination(
+    data[sa.brand35]
 )
+
+# breakpoint()
+
+print(model_brand35.summary())
 
 possible_models = {
     "1": (0, 1, 5),
@@ -22,6 +26,3 @@ possible_models = {
     "9": (1, 1, 0),
     "10": (1, 1, 1),
 }
-
-# model_auto_arima = sa.autoArima(data["volume.sales"], data["value.sales"])
-# print(model_auto_arima.summary())

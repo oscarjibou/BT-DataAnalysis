@@ -458,6 +458,31 @@ class SalesAnalysis:
 
         return model
 
+    def modelization_with_backward_elimination(
+        self, data_filtered_by_brand: pd.DataFrame
+    ) -> tuple[pd.DataFrame, sm.regression.linear_model.RegressionResultsWrapper]:
+
+        data_filtered_by_brand.rename(
+            columns={
+                "value.sales": "value_sales",
+                "unit.sales": "unit_sales",
+                "volume.sales": "volume_sales",
+                "pack.size": "pack_size",
+            },
+            inplace=True,
+        )
+        formule = "volume_sales ~ (unit_sales + value_sales + C(supermarket) + C(variant) + C(pack_size)) ** 2"
+
+        y, X = patsy.dmatrices(
+            formule, data=data_filtered_by_brand, return_type="dataframe"
+        )
+
+        # modelo = smf.ols(formula=formule, data=data_filtered_by_brand).fit()
+
+        final_model, selected_columns = self.backward_elimination(X, y)
+
+        return final_model, selected_columns
+
     def modelization_draw1(
         self,
         data_filtered_by_brand: pd.DataFrame,
@@ -537,27 +562,6 @@ class SalesAnalysis:
 
         return data_dummies, model
 
-    def modelization_draw2(
-        self, data_filtered_by_brand: pd.DataFrame
-    ) -> tuple[pd.DataFrame, sm.regression.linear_model.RegressionResultsWrapper]:
-
-        data_filtered_by_brand.rename(
-            columns={
-                "value.sales": "value_sales",
-                "unit.sales": "unit_sales",
-                "volume.sales": "volume_sales",
-                "pack.size": "pack_size",
-            },
-            inplace=True,
-        )
-        formule = "volume_sales ~ (unit_sales + value_sales + C(supermarket) + C(variant) + C(pack_size)) ** 2"
-
-        modelo = smf.ols(
-            formula=self.formula_larga(), data=data_filtered_by_brand
-        ).fit()
-
-        return data_filtered_by_brand, modelo
-
     def modelization_draw3(
         self, data_filtered_by_brand: pd.DataFrame
     ) -> sm.regression.linear_model.RegressionResultsWrapper:
@@ -595,6 +599,30 @@ class SalesAnalysis:
         final_model = sm.OLS(y, X_selected).fit()
 
         return final_model
+
+    def backward_elimination(self, X, y, alpha=0.05):
+        # Agrega la constante para el intercepto
+        X = sm.add_constant(X, has_constant="add")
+
+        numVars = X.shape[1]
+        for i in range(numVars):
+            model = sm.OLS(y, X).fit()
+            # Excluir el p-valor de la constante para no eliminarla
+            pvalues = model.pvalues.drop("const", errors="ignore")
+            maxPVal = pvalues.max()
+
+            # Elimina la variable con el p-valor más alto, pero no la constante
+            if maxPVal > alpha:
+                for j in range(numVars - i):
+                    if (
+                        model.pvalues.index[j] != "const"
+                        and model.pvalues[j] == maxPVal
+                    ):
+                        X = X.drop(X.columns[j], axis=1)
+            else:
+                break
+
+        return model, X.columns
 
     def ARIMA(
         self,
