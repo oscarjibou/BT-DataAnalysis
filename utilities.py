@@ -883,17 +883,6 @@ class SalesAnalysis:
             "supermarket_supermarket_B",
             "pack_size_351___500_GR",
             "pack_size_351___500_GR:variant_standard",
-            # "unit_sales:pack_size_351___500_GR",
-            # "value_sales:supermarket_supermarket_B",
-            # "value_sales:supermarket_supermarket_C",
-            # "value_sales:variant_light",
-            # "value_sales:variant_vegan",
-            # "value_sales:pack_size_701___1000_GR",
-            # "supermarket_supermarket_C",
-            # "supermarket_supermarket_C:variant_standard",
-            # "unit_sales:variant_vegan",
-            # "variant_standard",
-            # "value_sales",
         ]
 
         return interactions_deleted
