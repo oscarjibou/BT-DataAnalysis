@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import numpy as np
 import patsy
@@ -12,6 +13,12 @@ from sklearn.linear_model import LinearRegression
 from itertools import product
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.stats.diagnostic import acorr_ljungbox
+from statsmodels.stats.diagnostic import het_arch
+from scipy.stats import jarque_bera
+from scipy.stats import shapiro
+from statsmodels.stats.stattools import durbin_watson
+from statsmodels.stats.diagnostic import acorr_breusch_godfrey
+from sklearn.metrics import mean_squared_error, mean_absolute_error
 
 # from pmdarima.arima import auto_arima
 
@@ -30,6 +37,12 @@ class SalesAnalysis:
 
         # Convert the weeks into months using the convert_weeks_to_months method
         self.data = self.convert_weeks_to_months()
+
+        self.data = self.order_dataset_by_date(self.data)
+
+        self.data = self.add_price_column(self.data)
+
+        self.data = self.data.dropna()  # drop the rows with NaN values
 
         self.__variables__()  # update the variables after the conversion
 
@@ -471,7 +484,9 @@ class SalesAnalysis:
             },
             inplace=True,
         )
-        formule = "volume_sales ~ (unit_sales + value_sales + C(supermarket) + C(variant) + C(pack_size)) ** 2"
+        formule = (
+            "volume_sales ~ (price + C(supermarket) + C(variant) + C(pack_size)) ** 2"
+        )
 
         y, X = patsy.dmatrices(
             formule, data=data_filtered_by_brand, return_type="dataframe"
@@ -481,7 +496,7 @@ class SalesAnalysis:
 
         final_model, selected_columns = self.backward_elimination(X, y)
 
-        return final_model, selected_columns
+        return final_model
 
     def modelization_draw1(
         self,
@@ -686,7 +701,55 @@ class SalesAnalysis:
 
     #     return model_auto_arima
 
+    def forcasting(self, model, steps: int = 12):  # FIXME:
+        """
+        Input: sa.forcasting(model)
+        """
+
+        # forecast = model.forecast(steps=steps)
+        pass
+
     #################################### TESTS ####################################
+
+    def residual_white_noise_test(
+        self, residues: pd.Series, lags_ljungbox: int = 10
+    ) -> None:
+
+        ######## Residues Analysis (White Noise) ########
+        """
+        # 1. Mean value is zero
+        # 2. Constant variance
+            - Arch Test: p-value > 0.05 (no autocorrelation) variance is constant
+        # 3. Covaariance between two observations is only dependent on the lag between them
+        # 4 Normal distribution
+            - Jarque-Bera Test: p-value > 0.05 (data is normally distributed)
+            - Shapiro-Wilk Test: p-value > 0.05 (data is normally distributed)
+        ---------------------------------------------
+        Lfung-Box Test: p-value > 0.05 (data is white noise)
+        Durbin-Watson Test: 2.0 (no autocorrelation)
+        """
+
+        # ARCH test
+        arch_test = het_arch(residues)
+        print(f"ARCH p-value: {arch_test[1]} -- range(> 0.05)")
+
+        # Jarque-Bera test
+        jb_stat, jb_p_value = jarque_bera(residues)
+        print(f"Jarque-Bera p-value: {jb_p_value} -- range(> 0.05)")
+
+        # Shapiro-Wilk test
+        sw_stat, sw_p_value = shapiro(residues)
+        print(f"Shapiro-Wilk p-value: {sw_p_value} -- range(> 0.05)")
+
+        # Ljung-Box test
+        ljung_box_test = acorr_ljungbox(residues, lags=[lags_ljungbox])
+        print(f"Ljung-Box p-value:\n {ljung_box_test} -- range(> 0.05)")
+
+        # Durbin-Watson test
+        dw_stat = durbin_watson(residues)
+        print(f"Durbin-Watson statistic: {dw_stat} -- range(2.0)")
+
+        return None
 
     def test_stationarity(
         self, data_dummies: pd.DataFrame, sales: str = "volume.sales"
@@ -828,6 +891,83 @@ class SalesAnalysis:
 
         return monthly_data
 
+    def add_price_column(self, data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Adds a 'price' column to the data by dividing the 'value.sales' column by the 'unit.sales' column.
+
+        Parameters:
+        -----------
+        data : pd.DataFrame
+            The input DataFrame containing the sales data.
+
+        Returns:
+        --------
+        pd.DataFrame
+            The DataFrame with an additional 'price' column.
+        """
+
+        data["price"] = data["value.sales"] / data["unit.sales"]
+
+        return data
+
+    def divide_data_for_train_and_test(
+        self, data: pd.DataFrame, train_size: float = 0.8
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Divides the data into training and testing sets based on the specified training size.
+
+        Parameters:
+        -----------
+        data : pd.DataFrame
+            The input DataFrame containing the sales data.
+        train_size : float, optional
+            The proportion of the data to be used for training (default is 0.8).
+
+        Returns:
+        --------
+        tuple[pd.DataFrame, pd.DataFrame]
+            A tuple containing the training and testing DataFrames.
+        """
+
+        train_size = int(len(data) * train_size)
+
+        train_data = data[:train_size]
+        test_data = data[train_size:]
+
+        return train_data, test_data
+
+    def excel(self, data: pd.DataFrame, path: str) -> None:
+        """
+        Converts the data to an Excel file and saves it to the specified path.
+        Parameters:
+        -----------
+        data : pd.DataFrame
+            The input DataFrame to be converted and saved.
+        path : str
+            The path where the Excel file will be saved.
+        --------
+        Applied: sa.convert_excel(data, "data.xlsx")
+        --------
+        Returns:
+        --------
+        """
+        data.to_excel(path, index=False)
+
+    def order_dataset_by_date(self, data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Orders the dataset by date in ascending order.
+        Parameters:
+        -----------
+        data : pd.DataFrame
+            The input DataFrame to be ordered by date.
+        Returns:
+        --------
+        pd.DataFrame
+            The DataFrame ordered by date in ascending order.
+        """
+        data = data.sort_values(by="date", ascending=True)
+        return data
+
     def __interactions_delected_brand35__(self) -> list:
         """
         This method returns a list of interactions that have been deleted for brand 35.
@@ -886,3 +1026,8 @@ class SalesAnalysis:
         ]
 
         return interactions_deleted
+
+    def __clean__(self):
+        """clean the console screen"""
+        os.system("clear")
+        return None
