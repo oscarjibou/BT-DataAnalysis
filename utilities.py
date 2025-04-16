@@ -19,11 +19,11 @@ from scipy.stats import shapiro
 from statsmodels.stats.stattools import durbin_watson
 from statsmodels.stats.diagnostic import acorr_breusch_godfrey
 from sklearn.metrics import mean_squared_error, mean_absolute_error
+from statsforecast import StatsForecast
+from statsforecast.models import AutoARIMA
+# from pmdarima.arima import auto_arima #Error: Module not working
 
-# from pmdarima.arima import auto_arima
 
-
-#################################### SALES ANALYSIS CLASS ####################################
 class SalesAnalysis:
     def __init__(self, raw_data: pd.DataFrame):
 
@@ -617,7 +617,7 @@ class SalesAnalysis:
 
     def backward_elimination(self, X, y, alpha=0.05):
         # Agrega la constante para el intercepto
-        X = sm.add_constant(X, has_constant="add")
+        X = sm.add_constant(X, has_constant="skip")
 
         numVars = X.shape[1]
         for i in range(numVars):
@@ -936,7 +936,7 @@ class SalesAnalysis:
 
         return train_data, test_data
 
-    def excel(self, data: pd.DataFrame, path: str) -> None:
+    def excel(self, data, path: str) -> None:
         """
         Converts the data to an Excel file and saves it to the specified path.
         Parameters:
