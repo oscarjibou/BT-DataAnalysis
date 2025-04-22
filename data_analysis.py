@@ -1,71 +1,48 @@
-from utilities import *
+# from utilities import *
 
-raw_data = pd.read_excel("data/Datos_Market_copy.xlsx")
+# raw_data = pd.read_excel("data/Datos_Market_copy.xlsx")
 
-sa = SalesAnalysis(raw_data)
+# sa = SalesAnalysis(raw_data)
 
-data = sa.data[sa.brand35]
+# data = sa.data[sa.brand35]
 
-train_data, test_data = sa.divide_data_for_train_and_test(data=data, train_size=0.8)
+# train_data, test_data = sa.divide_data_for_train_and_test(data=data, train_size=0.8)
 
-sa.excel(train_data, path="data/train_data.xlsx")
-sa.excel(test_data, path="data/test_data.xlsx")
+# sa.excel(train_data, path="data/train_data.xlsx")
+# sa.excel(test_data, path="data/test_data.xlsx")
 
-model_brand35 = sa.modelization_with_backward_elimination(
-    data_filtered_by_brand=train_data
-)
+# model_brand35 = sa.modelization_with_backward_elimination(
+#     data_filtered_by_brand=train_data
+# )
 
-possible_models = {
-    "1": (0, 0, 5),
-    "2": (5, 0, 0),
-    "3": (5, 0, 5),
-}
-
-model_arima_brand35_selected = sa.ARIMA(
-    residues=model_brand35.resid,
-    model_chosen=(possible_models["1"]),
-    diff_need_for_residues=False,
-)
 
 # --------------------------------------
 # AutoArima and Forecasting
 # --------------------------------------
+import warnings
+from urllib3.exceptions import NotOpenSSLWarning
+
+# 1) Opcional: silenciar solo ese aviso
+warnings.filterwarnings("ignore", category=NotOpenSSLWarning)
+
+# 2) Librerías
+import numpy as np
+from pmdarima.arima import auto_arima
 
 
-# TODO: understang the forecasting output (for now I don't) --> see chat: todo tfg
-# Forecasting for residuals
-forecasting = model_arima_brand35_selected.forecast(steps=len(test_data))
+# 3) Datos ficticios
+np.random.seed(42)
+y = np.random.randn(120).cumsum()
 
-breakpoint()
+# 4) Ajuste
+model = auto_arima(
+    y,
+    seasonal=False,  # datos simulados sin estacionalidad
+    stepwise=True,
+    suppress_warnings=True,
+)
 
-# Forecasting for volume.sales
-# test_data_volum = test_data["volume.sales"]
-
-futures_data = model_brand35.predict(test_data)
-
-# FIXME:
-"""
-Expect more variables.
-
--  parece que el modelo espera 29 variables (como indica el tamaño de params), pero estás proporcionando solo 9 variables en test_data.
-
-variables used in prediction are: model_brand35.model.exog_names (are 29)
-"""
-
-
-breakpoint()
-futures_data = model_arima_brand35_selected.forecast(steps=len(test_data_volum))
-
-breakpoint()
-
-final_forest = forecasting + futures_data
-
-breakpoint()
-
-# TODO: uso this function to calculate the metrics for the study
-# rmse = np.sqrt(mean_squared_error(test_data, forecasting))
-# mae = mean_absolute_error(test_data, forecasting)
-
-# print(f"RMSE: {rmse}")
-# print(f"MAE: {mae}")
-##
+# 5) Resultados
+print(model.summary())  # tabla con los parámetros
+print("\nPronóstico próximo mes:")
+print(model.predict(n_periods=4))
