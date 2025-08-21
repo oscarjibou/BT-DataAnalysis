@@ -23,6 +23,8 @@ from statsforecast import StatsForecast
 from statsforecast.models import AutoARIMA
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 import warnings
+from urllib3.exceptions import NotOpenSSLWarning
+from pmdarima.arima import auto_arima
 
 warnings.filterwarnings("ignore")  # TODO: comprobar funcionamiento
 
