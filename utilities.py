@@ -19,12 +19,19 @@ from scipy.stats import shapiro
 from statsmodels.stats.stattools import durbin_watson
 from statsmodels.stats.diagnostic import acorr_breusch_godfrey
 from sklearn.metrics import mean_squared_error, mean_absolute_error
+from statsforecast import StatsForecast
+from statsforecast.models import AutoARIMA
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+import warnings
+from urllib3.exceptions import NotOpenSSLWarning
+from pmdarima.arima import auto_arima
 
-# from pmdarima.arima import auto_arima
+warnings.filterwarnings("ignore")  # TODO: comprobar funcionamiento
+
+# from pmdarima.arima import auto_arima #Error: Module not working
 
 
-#################################### SALES ANALYSIS CLASS ####################################
-class SalesAnalysis:
+class SalesAnalysis:  # TODO: add a class for descriptive analysis
     def __init__(self, raw_data: pd.DataFrame):
 
         # Assign the original data to a class attribute
@@ -475,7 +482,7 @@ class SalesAnalysis:
         self, data_filtered_by_brand: pd.DataFrame
     ) -> tuple[pd.DataFrame, sm.regression.linear_model.RegressionResultsWrapper]:
 
-        data_filtered_by_brand.rename(
+        data_filtered_by_brand.rename(  # FIXME: Tener en cuenta que cuando hagamos el modelo. Se cambiará la sintaxis de train_data, pero no de test_data
             columns={
                 "value.sales": "value_sales",
                 "unit.sales": "unit_sales",
@@ -617,7 +624,7 @@ class SalesAnalysis:
 
     def backward_elimination(self, X, y, alpha=0.05):
         # Agrega la constante para el intercepto
-        X = sm.add_constant(X, has_constant="add")
+        X = sm.add_constant(X, has_constant="skip")
 
         numVars = X.shape[1]
         for i in range(numVars):
@@ -656,7 +663,7 @@ class SalesAnalysis:
 
         return model_arima
 
-    def ARIMAX(
+    def ARIMAX(  # FIXME: si no lo uso, borrarlo. Creo que el Sarimax es lo mismo que el ARIMAX
         self,
         endog: pd.Series = None,
         exog: pd.Series = None,
@@ -701,13 +708,46 @@ class SalesAnalysis:
 
     #     return model_auto_arima
 
-    def forcasting(self, model, steps: int = 12):  # FIXME:
-        """
-        Input: sa.forcasting(model)
-        """
+    def auto_arima(self, data, exog):  # TODO: in progress
 
-        # forecast = model.forecast(steps=steps)
-        pass
+        # Check that 'volume_sales' column exists
+        if "volume_sales" not in data.columns:
+            raise KeyError("Column 'volume_sales' not found in the input data")
+
+        pdq = [
+            (p, d, q) for p in range(3) for d in range(2) for q in range(3)
+        ]  # TODO: porque ponemos ese rango para comprobar
+        seasonal_pdq = [(P, 1, Q, 12) for P in range(2) for Q in range(2)]
+
+        best_aic = np.inf
+        best_order = None
+        best_seasonal = None
+
+        for order in pdq:
+            for s_order in seasonal_pdq:
+                try:
+                    model = SARIMAX(
+                        data["volume_sales"],
+                        order=order,
+                        seasonal_order=s_order,
+                        exog=exog,
+                        enforce_stationarity=False,
+                        enforce_invertibility=False,
+                    )
+                    res = model.fit(disp=False)
+                    if res.aic < best_aic:
+                        best_aic = res.aic
+                        best_order = order
+                        best_seasonal = s_order
+                except Exception:
+                    continue
+
+        print(
+            f">> Mejor configuración: order={best_order}, "
+            f"seasonal_order={best_seasonal}, AIC={best_aic:.2f}"
+        )
+
+        return (best_order, best_seasonal)
 
     #################################### TESTS ####################################
 
@@ -936,7 +976,7 @@ class SalesAnalysis:
 
         return train_data, test_data
 
-    def excel(self, data: pd.DataFrame, path: str) -> None:
+    def excel(self, data, path: str) -> None:
         """
         Converts the data to an Excel file and saves it to the specified path.
         Parameters:
