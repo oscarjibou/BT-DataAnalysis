@@ -28,8 +28,6 @@ from pmdarima.arima import auto_arima
 
 warnings.filterwarnings("ignore")  # TODO: comprobar funcionamiento
 
-# from pmdarima.arima import auto_arima #Error: Module not working
-
 
 class SalesAnalysis:  # TODO: add a class for descriptive analysis
     def __init__(self, raw_data: pd.DataFrame):
@@ -482,7 +480,7 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
         self, data_filtered_by_brand: pd.DataFrame
     ) -> tuple[pd.DataFrame, sm.regression.linear_model.RegressionResultsWrapper]:
 
-        data_filtered_by_brand.rename(  # FIXME: Tener en cuenta que cuando hagamos el modelo. Se cambiará la sintaxis de train_data, pero no de test_data
+        data_filtered_by_brand.rename(  # renaming columns for compatibility with patsy
             columns={
                 "value.sales": "value_sales",
                 "unit.sales": "unit_sales",
@@ -502,6 +500,16 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
         # modelo = smf.ols(formula=formule, data=data_filtered_by_brand).fit()
 
         final_model, selected_columns = self.backward_elimination(X, y)
+
+        data_filtered_by_brand.rename(
+            columns={
+                "value_sales": "value.sales",
+                "unit_sales": "unit.sales",
+                "volume_sales": "volume.sales",
+                "pack_size": "pack.size",
+            },
+            inplace=True,
+        )
 
         return final_model
 
