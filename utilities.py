@@ -691,71 +691,31 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
 
         return model_arimax
 
-    # def autoArima(
-    #     self,
-    #     endog: pd.Series = None,
-    #     exog: pd.Series = None,
-    #     seasonal: bool = False,
-    # ):
-
-    #     if exog is None:
-    #         exog = self.data["value.sales"]
-
-    #     if endog is None:
-    #         endog = self.data["volume.sales"]
-
-    #     model_auto_arima = auto_arima(
-    #         endog,
-    #         exog,
-    #         seasonal=seasonal,
-    #         stepwise=True,
-    #         trace=True,
-    #         error_action="ignore",
-    #         suppress_warnings=True,
-    #     )
-
-    #     return model_auto_arima
-
-    def auto_arima(self, data, exog):  # TODO: in progress
-
-        # Check that 'volume_sales' column exists
-        if "volume_sales" not in data.columns:
-            raise KeyError("Column 'volume_sales' not found in the input data")
-
-        pdq = [
-            (p, d, q) for p in range(3) for d in range(2) for q in range(3)
-        ]  # TODO: porque ponemos ese rango para comprobar
-        seasonal_pdq = [(P, 1, Q, 12) for P in range(2) for Q in range(2)]
-
-        best_aic = np.inf
-        best_order = None
-        best_seasonal = None
-
-        for order in pdq:
-            for s_order in seasonal_pdq:
-                try:
-                    model = SARIMAX(
-                        data["volume_sales"],
-                        order=order,
-                        seasonal_order=s_order,
-                        exog=exog,
-                        enforce_stationarity=False,
-                        enforce_invertibility=False,
-                    )
-                    res = model.fit(disp=False)
-                    if res.aic < best_aic:
-                        best_aic = res.aic
-                        best_order = order
-                        best_seasonal = s_order
-                except Exception:
-                    continue
-
-        print(
-            f">> Mejor configuración: order={best_order}, "
-            f"seasonal_order={best_seasonal}, AIC={best_aic:.2f}"
+    def autoarima(self, data, d=0, D=1, exog=None):
+        """
+        Auto ARIMA model fitting.
+        """
+        model = auto_arima(
+            data,
+            exogenous=exog,
+            d=d,
+            D=D,
+            seasonal=True,
+            m=12,
+            start_p=0,
+            start_q=0,
+            max_p=4,
+            max_q=4,
+            start_P=0,
+            start_Q=0,
+            max_P=2,
+            max_Q=2,
+            information_criterion="aic",
+            stepwise=True,
+            trace=True,
+            suppress_warnings=True,
         )
-
-        return (best_order, best_seasonal)
+        return model
 
     #################################### TESTS ####################################
 
