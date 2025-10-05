@@ -496,10 +496,11 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
         y, X = patsy.dmatrices(
             formule, data=data_filtered_by_brand, return_type="dataframe"
         )
+        design_info = X.design_info
 
         # modelo = smf.ols(formula=formule, data=data_filtered_by_brand).fit()
 
-        final_model, selected_columns = self.backward_elimination(X, y)
+        final_model, selected_columns = self.backward_elimination_old(X, y, alpha=0.05)
 
         data_filtered_by_brand.rename(
             columns={
@@ -511,7 +512,7 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
             inplace=True,
         )
 
-        return final_model
+        return final_model, design_info, selected_columns
 
     def modelization_draw1(
         self,
@@ -630,7 +631,7 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
 
         return final_model
 
-    def backward_elimination(self, X, y, alpha=0.05):
+    def backward_elimination_old(self, X, y, alpha=0.05):
         # Agrega la constante para el intercepto
         X = sm.add_constant(X, has_constant="skip")
 
@@ -653,6 +654,37 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
                 break
 
         return model, X.columns
+
+    def backward_elimination(self, X: pd.DataFrame, y, alpha: float = 0.05):
+        """
+        X debe venir de patsy.dmatrices(..., return_type='dataframe')
+        y es un pandas Series/DataFrame de dmatrices (columna única).
+        """
+        # Patsy ya incluye 'Intercept' en X. Aseguramos no añadir otra.
+        X_be = X.copy()
+
+        # nombres de constante posibles
+        CONST_CANDIDATES = [c for c in ["const", "Intercept"] if c in X_be.columns]
+
+        while True:
+            model = sm.OLS(y, X_be).fit()
+            # quitamos p-valor de la constante (si existe) para no eliminarla
+            pvals = model.pvalues.copy()
+            for c in CONST_CANDIDATES:
+                if c in pvals.index:
+                    pvals = pvals.drop(c)
+            if pvals.empty:
+                break
+
+            max_p = pvals.max()
+            if max_p > alpha:
+                worst_var = pvals.idxmax()  # nombre de la peor variable
+                # eliminar por nombre (no por posición)
+                X_be = X_be.drop(columns=[worst_var])
+            else:
+                break
+
+        return model, X_be.columns.tolist()
 
     def ARIMA(
         self,
