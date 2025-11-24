@@ -26,7 +26,7 @@ import warnings
 from urllib3.exceptions import NotOpenSSLWarning
 from pmdarima.arima import auto_arima
 
-warnings.filterwarnings("ignore")  # TODO: comprobar funcionamiento
+warnings.filterwarnings("ignore", category=NotOpenSSLWarning)
 
 
 class SalesAnalysis:  # TODO: add a class for descriptive analysis
@@ -479,6 +479,16 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
     def modelization_with_backward_elimination(
         self, data_filtered_by_brand: pd.DataFrame
     ) -> tuple[pd.DataFrame, sm.regression.linear_model.RegressionResultsWrapper]:
+        """
+        Modelization with backward elimination.
+        Parameters:
+        data_filtered_by_brand: pd.DataFrame
+            The data filtered by brand.
+        Returns:
+        - model, which is the final model after backward elimination.
+        - design_info, which is the design info of the model. It contains the design matrix and the design formula.
+        - selected_columns, which are the columns that were selected by the backward elimination.
+        """
 
         data_filtered_by_brand.rename(  # renaming columns for compatibility with patsy
             columns={
@@ -749,6 +759,190 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
         )
         return model
 
+    def x_train_exog(self, train_data, selected_columns, model):
+
+        train_data_for_patsy = train_data.copy()
+        train_data_for_patsy.rename(
+            columns={
+                "value.sales": "value_sales",
+                "unit.sales": "unit_sales",
+                "volume.sales": "volume_sales",
+                "pack.size": "pack_size",
+            },
+            inplace=True,
+        )
+
+        # Use the same formula as in the regression
+        formula = (
+            "volume_sales ~ (price + C(supermarket) + C(variant) + C(pack_size)) ** 2"
+        )
+
+        # Create the design matrix
+        y_design, X_design = patsy.dmatrices(
+            formula, data=train_data_for_patsy, return_type="dataframe"
+        )
+
+        selected_columns_no_intercept = [
+            col for col in selected_columns if col != "Intercept"
+        ]
+        X_train_exog = X_design[
+            selected_columns_no_intercept
+        ]  # pandas DataFrame of exogenous features without the intercept.
+
+        model_features = list(model.params.index)
+        exog_features = list(X_train_exog.columns)
+
+        model_features_no_intercept = [f for f in model_features if f != "Intercept"]
+        if set(model_features_no_intercept) == set(exog_features):
+            print("✅ YES - All features match perfectly!")
+        else:
+            print("❌ NO - Features don't match")
+
+        return X_train_exog
+
+    def x_test_exog(self, test_data, selected_columns, design_info):
+        """
+        Prepare exogenous variables for test data using the SAME transformation
+        as training data (same formula, same selected columns, same design_info).
+
+        Parameters:
+        -----------
+        test_data : pd.DataFrame
+            The test dataset containing the same columns as training data.
+        selected_columns : list
+            The list of columns selected by backward elimination (from modelization_with_backward_elimination).
+        design_info : patsy.DesignInfo
+            The design info from the training data to ensure identical column creation.
+
+        Returns:
+        --------
+        pd.DataFrame
+            Test exogenous variables with the same columns as X_train_exog (without Intercept).
+
+        Notes:
+        ------
+        - Uses the design_info from training to create identical columns
+        - Handles missing categories in test data by using training's design matrix
+        - Filters to use only the selected_columns from backward elimination
+        - Removes Intercept column as it's not needed for exogenous variables
+        """
+        test_data_for_patsy = test_data.copy()
+
+        # Rename columns to match Patsy naming convention
+        test_data_for_patsy.rename(
+            columns={
+                "value.sales": "value_sales",
+                "unit.sales": "unit_sales",
+                "volume.sales": "volume_sales",
+                "pack.size": "pack_size",
+            },
+            inplace=True,
+        )
+
+        # Use the design_info from training to create the SAME design matrix
+        # This ensures that even if some categories are missing in test data,
+        # the same columns will be created (with zeros for missing categories)
+        X_design = patsy.build_design_matrices(
+            [design_info], test_data_for_patsy, return_type="dataframe"
+        )[0]
+
+        # Use the SAME selected columns (without Intercept)
+        selected_columns_no_intercept = [
+            col for col in selected_columns if col != "Intercept"
+        ]
+
+        X_test_exog = X_design[selected_columns_no_intercept]
+
+        return X_test_exog
+
+    def clean_exogenous_variables(self, X_exog, corr_threshold=0.95, verbose=False):
+        """
+        Limpia variables exógenas eliminando:
+        1. Variables constantes (rango = 0)
+        2. Variables con correlación perfecta (|r| = 1.0)
+        3. Variables altamente correlacionadas (|r| > corr_threshold)
+
+        Parameters:
+        -----------
+        X_exog : pd.DataFrame
+            Variables exógenas a limpiar
+        corr_threshold : float, default=0.95
+            Umbral de correlación para eliminar variables (0.95 = 95%)
+        verbose : bool, default=False
+            Si True, imprime información sobre el proceso
+
+        Returns:
+        --------
+        X_clean : pd.DataFrame
+            Variables exógenas limpias
+        removed_vars : list
+            Lista de variables eliminadas
+        cond_number_before : float
+            Número de condición antes de la limpieza
+        cond_number_after : float
+            Número de condición después de la limpieza
+        """
+
+        X_clean = X_exog.copy()
+        removed_vars = []
+
+        # Calcular número de condición inicial
+        try:
+            X_matrix = X_clean.values
+            X_with_const = np.column_stack([np.ones(len(X_matrix)), X_matrix])
+            cond_number_before = np.linalg.cond(X_with_const)
+        except:
+            cond_number_before = None
+
+        # 1. Eliminar variables constantes
+        ranges = X_clean.max() - X_clean.min()
+        constant_vars = ranges[ranges == 0].index.tolist()
+        if constant_vars:
+            removed_vars.extend(constant_vars)
+            X_clean = X_clean.drop(columns=constant_vars)
+
+        # 2. Eliminar variables con correlación perfecta
+        corr_matrix = X_clean.corr()
+        perfect_corr_vars = set()
+
+        for i in range(len(corr_matrix.columns)):
+            for j in range(i + 1, len(corr_matrix.columns)):
+                if abs(corr_matrix.iloc[i, j]) >= 1.0 - 1e-10:
+                    var2 = corr_matrix.columns[j]
+                    if var2 not in perfect_corr_vars:
+                        perfect_corr_vars.add(var2)
+
+        if perfect_corr_vars:
+            removed_vars.extend(list(perfect_corr_vars))
+            X_clean = X_clean.drop(columns=list(perfect_corr_vars))
+
+        # 3. Eliminar variables altamente correlacionadas
+        corr_matrix = X_clean.corr()
+        high_corr_vars = set()
+
+        for i in range(len(corr_matrix.columns)):
+            for j in range(i + 1, len(corr_matrix.columns)):
+                if abs(corr_matrix.iloc[i, j]) > corr_threshold:
+                    var2 = corr_matrix.columns[j]
+                    if var2 not in high_corr_vars:
+                        high_corr_vars.add(var2)
+
+        if high_corr_vars:
+            removed_vars.extend(list(high_corr_vars))
+            X_clean = X_clean.drop(columns=list(high_corr_vars))
+
+        # Calcular número de condición final
+        try:
+            X_matrix_clean = X_clean.values
+            X_with_const_clean = np.column_stack(
+                [np.ones(len(X_matrix_clean)), X_matrix_clean]
+            )
+            cond_number_after = np.linalg.cond(X_with_const_clean)
+        except:
+            cond_number_after = None
+
+        return X_clean, removed_vars, cond_number_before, cond_number_after
+
     #################################### TESTS ####################################
 
     def residual_white_noise_test(
@@ -771,23 +965,29 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
 
         # ARCH test
         arch_test = het_arch(residues)
-        print(f"ARCH p-value: {arch_test[1]} -- range(> 0.05)")
+        print(
+            f"[Heteroscedasticity Test] ARCH p-value: {arch_test[1]} -- range(> 0.05)"
+        )
 
         # Jarque-Bera test
         jb_stat, jb_p_value = jarque_bera(residues)
-        print(f"Jarque-Bera p-value: {jb_p_value} -- range(> 0.05)")
+        print(f"[Normality Test] Jarque-Bera p-value: {jb_p_value} -- range(> 0.05)")
 
         # Shapiro-Wilk test
         sw_stat, sw_p_value = shapiro(residues)
-        print(f"Shapiro-Wilk p-value: {sw_p_value} -- range(> 0.05)")
+        print(f"[Normality Test] Shapiro-Wilk p-value: {sw_p_value} -- range(> 0.05)")
 
         # Ljung-Box test
         ljung_box_test = acorr_ljungbox(residues, lags=[lags_ljungbox])
-        print(f"Ljung-Box p-value:\n {ljung_box_test} -- range(> 0.05)")
+        print(
+            f"[Autocorrelation Test] Ljung-Box p-value:\n {ljung_box_test} -- range(> 0.05)"
+        )
 
         # Durbin-Watson test
         dw_stat = durbin_watson(residues)
-        print(f"Durbin-Watson statistic: {dw_stat} -- range(2.0)")
+        print(
+            f"[Autocorrelation Test first order] Durbin-Watson statistic: {dw_stat} -- range(2.0)"
+        )
 
         return None
 
@@ -820,7 +1020,7 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
 
         # Mostramos los resultados
         print(f"Estadístico ADF: {adf_result[0]}")
-        print(f"Valor p: {adf_result[1]}")
+        print(f"Valor p: {adf_result[1]} -- es estacionaria si p < 0.05")
         print("Valores críticos:")
         for key, value in adf_result[4].items():
             print(f"{key}: {value}")
