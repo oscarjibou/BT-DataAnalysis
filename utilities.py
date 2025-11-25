@@ -5,6 +5,8 @@ import patsy
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
+import warnings
+
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.stattools import adfuller
 from sklearn.preprocessing import PolynomialFeatures
@@ -22,9 +24,9 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error
 from statsforecast import StatsForecast
 from statsforecast.models import AutoARIMA
 from statsmodels.tsa.statespace.sarimax import SARIMAX
-import warnings
 from urllib3.exceptions import NotOpenSSLWarning
 from pmdarima.arima import auto_arima
+from scipy import stats
 
 warnings.filterwarnings("ignore", category=NotOpenSSLWarning)
 
@@ -773,9 +775,17 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
         )
 
         # Use the same formula as in the regression
-        formula = (
-            "volume_sales ~ (price + C(supermarket) + C(variant) + C(pack_size)) ** 2"
-        )
+        has_brand = any("brand" in str(col).lower() for col in selected_columns)
+        if has_brand:
+            formula = (
+                "volume_sales ~ price + C(supermarket) + C(variant) + C(pack_size) + "
+                "C(brand) + (price + C(brand)) ** 2"
+            )
+        else:
+            formula = "volume_sales ~ (price + C(supermarket) + C(variant) + C(pack_size)) ** 2"
+        # formula = (
+        #     "volume_sales ~ (price + C(supermarket) + C(variant) + C(pack_size)) ** 2"
+        # )
 
         # Create the design matrix
         y_design, X_design = patsy.dmatrices(
