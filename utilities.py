@@ -381,6 +381,69 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
 
         plt.show()
 
+    def analysis_residuals(self, residues: pd.Series, fitted_values: pd.Series):
+        """
+        Analiza los residuos de un modelo ARIMAX.
+        Parameters:
+        -----------
+        residues: pd.Series
+            Los residuos del modelo ARIMAX.
+        fitted_values: pd.Series
+            Los valores ajustados del modelo ARIMAX.
+        """
+        # Crear figura con 6 subplots (3 filas x 2 columnas)
+        fig, axes = plt.subplots(3, 2, figsize=(15, 10))
+        fig.suptitle(
+            "Análisis de Residuos - Diagnóstico del Modelo ARIMAX",
+            fontsize=16,
+            fontweight="bold",
+        )
+
+        # 1. Residuos vs. Tiempo (arriba-izquierda)
+        axes[0, 0].plot(residues, color="blue", linewidth=0.8)
+        axes[0, 0].axhline(y=0, color="red", linestyle="--", linewidth=1)
+        axes[0, 0].set_title("Residuos vs. Tiempo", fontsize=12, fontweight="bold")
+        axes[0, 0].set_xlabel("Index")
+        axes[0, 0].set_ylabel("Residuos")
+        axes[0, 0].grid(True, alpha=0.3)
+
+        # 2. Residuos vs. Valores Ajustados (arriba-derecha)
+        axes[0, 1].scatter(fitted_values, residues, alpha=0.5, s=10, color="blue")
+        axes[0, 1].axhline(y=0, color="red", linestyle="--", linewidth=1)
+        axes[0, 1].set_title(
+            "Residuos vs. Valores Ajustados", fontsize=12, fontweight="bold"
+        )
+        axes[0, 1].set_xlabel("Fitted Values")
+        axes[0, 1].set_ylabel("Residuos")
+        axes[0, 1].grid(True, alpha=0.3)
+
+        # 3. Q-Q Plot (medio-izquierda)
+        stats.probplot(residues, dist="norm", plot=axes[1, 0])
+        axes[1, 0].set_title("Q-Q Plot (Normalidad)", fontsize=12, fontweight="bold")
+        axes[1, 0].grid(True, alpha=0.3)
+
+        # 4. ACF (Autocorrelación) (medio-derecha)
+        plot_acf(residues, lags=12, ax=axes[1, 1], alpha=0.05)
+        axes[1, 1].set_title("Autocorrelación (ACF)", fontsize=12, fontweight="bold")
+        axes[1, 1].grid(True, alpha=0.3)
+
+        # 5. PACF (Autocorrelación Parcial) (abajo-izquierda)
+        plot_pacf(residues, lags=12, ax=axes[2, 0], alpha=0.05, method="ywm")
+        axes[2, 0].set_title(
+            "Autocorrelación Parcial (PACF)", fontsize=12, fontweight="bold"
+        )
+        axes[2, 0].grid(True, alpha=0.3)
+
+        # 6. Histograma de Residuos (abajo-derecha)
+        axes[2, 1].hist(residues, bins=30, edgecolor="black", alpha=0.7, color="blue")
+        axes[2, 1].set_title("Histograma de Residuos", fontsize=12, fontweight="bold")
+        axes[2, 1].set_xlabel("Residuos")
+        axes[2, 1].set_ylabel("Frequency")
+        axes[2, 1].grid(True, alpha=0.3)
+
+        plt.tight_layout()
+        plt.show()
+
     #################################### MODELIZATION ####################################
 
     def modelization(
@@ -735,33 +798,7 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
 
         return model_arimax
 
-    def autoarima(self, data, d=0, D=1, exog=None):
-        """
-        Auto ARIMA model fitting.
-        """
-        model = auto_arima(
-            data,
-            exogenous=exog,
-            d=d,
-            D=D,
-            seasonal=True,
-            m=12,
-            start_p=0,
-            start_q=0,
-            max_p=4,
-            max_q=4,
-            start_P=0,
-            start_Q=0,
-            max_P=2,
-            max_Q=2,
-            information_criterion="aic",
-            stepwise=True,
-            trace=True,
-            suppress_warnings=True,
-        )
-        return model
-
-    def x_train_exog(self, train_data, selected_columns, model):
+    def x_train_exog(self, train_data, selected_columns, model, aggregation: str):
 
         train_data_for_patsy = train_data.copy()
         train_data_for_patsy.rename(
@@ -781,6 +818,8 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
                 "volume_sales ~ price + C(supermarket) + C(variant) + C(pack_size) + "
                 "C(brand) + (price + C(brand)) ** 2"
             )
+            if aggregation != "none":
+                formula += f" + {aggregation}"
         else:
             formula = "volume_sales ~ (price + C(supermarket) + C(variant) + C(pack_size)) ** 2"
         # formula = (
