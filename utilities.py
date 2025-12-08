@@ -761,6 +761,144 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
 
         return model, X_be.columns.tolist()
 
+    def regression_with_backward_elimination(
+        self,
+        data: pd.DataFrame,
+        target: str = "volume.sales",
+        alpha: float = 0.05,
+        verbose: bool = False,
+        aggregation_formule: str = None,
+    ) -> tuple:
+        """
+        Realiza regresión OLS con backward elimination automática.
+
+        Elimina automáticamente las variables no significativas (p-valor > alpha)
+        del modelo de regresión.
+
+        Parameters:
+        -----------
+        data : pd.DataFrame
+            DataFrame con los datos. Debe contener las columnas: price, supermarket,
+            variant, pack.size, brand, y la columna target.
+        target : str, default="volume.sales"
+            Nombre de la columna objetivo (variable dependiente).
+        alpha : float, default=0.05
+            Nivel de significancia para eliminar variables. Variables con p-valor > alpha
+            serán eliminadas.
+        verbose : bool, default=False
+            Si True, muestra el progreso de eliminación de variables.
+        agrregation_formule : str, default=None
+            Fórmula de agregación para agregar al modelo.
+            Example: "Q('dummy_outlier_2022_07_31')"
+        Returns:
+        --------
+        tuple:
+            - model: Modelo final de statsmodels después de backward elimination
+            - selected_vars: Lista de variables seleccionadas (nombres de columnas)
+            - eliminated_vars: Lista de variables eliminadas durante el proceso
+        """
+        # Hacer una copia para no modificar el DataFrame original
+        data_work = data.copy()
+
+        # Renombrar columnas para compatibilidad con patsy (puntos → guiones bajos)
+        #########################################################################################
+        rename_dict = {
+            "value.sales": "value_sales",
+            "unit.sales": "unit_sales",
+            "volume.sales": "volume_sales",
+            "pack.size": "pack_size",
+        }
+        rename_dict = {k: v for k, v in rename_dict.items() if k in data_work.columns}
+        data_work.rename(columns=rename_dict, inplace=True)
+
+        # Actualizar el nombre del target si fue renombrado
+        target_renamed = rename_dict.get(target, target)
+
+        # Crear fórmula base
+        formule = (
+            f"{target_renamed} ~ price + C(supermarket) + C(variant) + C(pack_size) + "
+            f"C(brand) + (price + C(brand)) ** 2"
+        )
+
+        if aggregation_formule is not None:
+            formule += f" + {aggregation_formule}"
+
+        if verbose:
+            print(f"Fórmula del modelo:")
+            print(formule)
+            if aggregation_formule is not None:
+                print(f"\n✅ {aggregation_formule} agregada al modelo")
+
+        # Crear matrices de diseño usando patsy
+        y, X = patsy.dmatrices(formule, data=data_work, return_type="dataframe")
+
+        # Guardar todas las variables iniciales
+        initial_vars = set(X.columns.tolist())
+
+        # Nombres posibles de constante/intercepto
+        CONST_CANDIDATES = [c for c in ["const", "Intercept"] if c in X.columns]
+
+        # Lista para rastrear variables eliminadas
+        eliminated_vars = []
+
+        # Backward elimination
+        iteration = 0
+        while True:
+            iteration += 1
+
+            # Ajustar el modelo OLS
+            model = sm.OLS(y, X).fit()
+
+            # Obtener p-valores excluyendo la constante/intercepto
+            pvals = model.pvalues.copy()
+            for c in CONST_CANDIDATES:
+                if c in pvals.index:
+                    pvals = pvals.drop(c)
+
+            # Si no hay más variables (solo queda la constante), terminar
+            if pvals.empty:
+                if verbose:
+                    print("No quedan variables para eliminar (solo constante).")
+                break
+
+            # Encontrar el p-valor máximo
+            max_p = pvals.max()
+
+            # Si el p-valor máximo es mayor que alpha, eliminar esa variable
+            if max_p > alpha:
+                worst_var = pvals.idxmax()
+
+                if verbose:
+                    print(
+                        f"Iteración {iteration}: Eliminando '{worst_var}' (p-valor = {max_p:.4f})"
+                    )
+
+                # Eliminar la variable por nombre
+                X = X.drop(columns=[worst_var])
+                eliminated_vars.append(worst_var)
+            else:
+                if verbose:
+                    print(
+                        f"Iteración {iteration}: Todas las variables restantes son significativas (p-valor ≤ {alpha})"
+                    )
+                break
+
+        # Ajustar el modelo final con las variables seleccionadas
+        final_model = sm.OLS(y, X).fit()
+
+        # Obtener las variables seleccionadas
+        selected_vars = X.columns.tolist()
+
+        if verbose:
+            print(f"\nResumen:")
+            print(f"  Variables iniciales: {len(initial_vars)}")
+            print(f"  Variables seleccionadas: {len(selected_vars)}")
+            print(f"  Variables eliminadas: {len(eliminated_vars)}")
+            print(f"  R² ajustado: {final_model.rsquared_adj:.4f}")
+
+        return final_model, selected_vars, eliminated_vars
+        pass
+
     def ARIMA(
         self,
         residues: pd.Series,
@@ -798,54 +936,105 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
 
         return model_arimax
 
-    def x_train_exog(self, train_data, selected_columns, model, aggregation: str):
+    def x_train_exog_custom(
+        self,
+        train_data,
+        selected_columns,
+        model,
+        target="volume.sales",
+        aggregation_formule=None,
+    ):
+        """
+        Prepara las variables exógenas usando la misma fórmula que regression_with_backward_elimination.
 
+        Parameters:
+        -----------
+        train_data : pd.DataFrame
+            Datos de entrenamiento
+        selected_columns : list
+            Lista de columnas seleccionadas por backward elimination
+        model : statsmodels model
+            Modelo ajustado
+        target : str
+            Nombre de la columna objetivo
+
+        Returns:
+        --------
+        X_train_exog : pd.DataFrame
+            DataFrame con las variables exógenas seleccionadas
+        """
         train_data_for_patsy = train_data.copy()
-        train_data_for_patsy.rename(
-            columns={
-                "value.sales": "value_sales",
-                "unit.sales": "unit_sales",
-                "volume.sales": "volume_sales",
-                "pack.size": "pack_size",
-            },
-            inplace=True,
+
+        # Renombrar columnas para compatibilidad con patsy
+        rename_dict = {
+            "value.sales": "value_sales",
+            "unit.sales": "unit_sales",
+            "volume.sales": "volume_sales",
+            "pack.size": "pack_size",
+        }
+        rename_dict = {
+            k: v for k, v in rename_dict.items() if k in train_data_for_patsy.columns
+        }
+        train_data_for_patsy.rename(columns=rename_dict, inplace=True)
+
+        # Actualizar el nombre del target si fue renombrado
+        target_renamed = rename_dict.get(target, target)
+
+        # Usar la MISMA fórmula que en regression_with_backward_elimination
+        formula = (
+            "volume_sales ~ price + C(supermarket) + C(variant) + C(pack_size) + "
+            "C(brand) + (price + C(brand)) ** 2"
         )
+        if aggregation_formule is not None:
+            formula += f" + {aggregation_formule}"
 
-        # Use the same formula as in the regression
-        has_brand = any("brand" in str(col).lower() for col in selected_columns)
-        if has_brand:
-            formula = (
-                "volume_sales ~ price + C(supermarket) + C(variant) + C(pack_size) + "
-                "C(brand) + (price + C(brand)) ** 2"
-            )
-            if aggregation != "none":
-                formula += f" + {aggregation}"
-        else:
-            formula = "volume_sales ~ (price + C(supermarket) + C(variant) + C(pack_size)) ** 2"
-        # formula = (
-        #     "volume_sales ~ (price + C(supermarket) + C(variant) + C(pack_size)) ** 2"
-        # )
-
-        # Create the design matrix
+        # Crear la matriz de diseño
         y_design, X_design = patsy.dmatrices(
             formula, data=train_data_for_patsy, return_type="dataframe"
         )
 
+        # Filtrar solo las columnas seleccionadas (excluyendo Intercept)
         selected_columns_no_intercept = [
-            col for col in selected_columns if col != "Intercept"
+            col for col in selected_columns if col != "Intercept" and col != "const"
         ]
-        X_train_exog = X_design[
-            selected_columns_no_intercept
-        ]  # pandas DataFrame of exogenous features without the intercept.
 
+        # Verificar que las columnas existen
+        missing_cols = [
+            col for col in selected_columns_no_intercept if col not in X_design.columns
+        ]
+        if missing_cols:
+            print(
+                f"⚠️ Advertencia: Las siguientes columnas no se encontraron en X_design: {missing_cols}"
+            )
+            print(f"Columnas disponibles en X_design: {list(X_design.columns)}")
+            # Filtrar solo las que existen
+            selected_columns_no_intercept = [
+                col for col in selected_columns_no_intercept if col in X_design.columns
+            ]
+
+        X_train_exog = X_design[selected_columns_no_intercept]
+
+        # Verificar que coinciden con el modelo
         model_features = list(model.params.index)
         exog_features = list(X_train_exog.columns)
 
-        model_features_no_intercept = [f for f in model_features if f != "Intercept"]
+        model_features_no_intercept = [
+            f for f in model_features if f not in ["Intercept", "const"]
+        ]
         if set(model_features_no_intercept) == set(exog_features):
             print("✅ YES - All features match perfectly!")
         else:
             print("❌ NO - Features don't match")
+            print(
+                f"Model features (sin intercept): {sorted(model_features_no_intercept)}"
+            )
+            print(f"Exog features: {sorted(exog_features)}")
+            missing_in_exog = set(model_features_no_intercept) - set(exog_features)
+            missing_in_model = set(exog_features) - set(model_features_no_intercept)
+            if missing_in_exog:
+                print(f"Missing in exog: {missing_in_exog}")
+            if missing_in_model:
+                print(f"Missing in model: {missing_in_model}")
 
         return X_train_exog
 
