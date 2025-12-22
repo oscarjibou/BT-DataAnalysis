@@ -27,6 +27,7 @@ from statsmodels.tsa.statespace.sarimax import SARIMAX
 from urllib3.exceptions import NotOpenSSLWarning
 from pmdarima.arima import auto_arima
 from scipy import stats
+from prophet import Prophet
 
 warnings.filterwarnings("ignore", category=NotOpenSSLWarning)
 
