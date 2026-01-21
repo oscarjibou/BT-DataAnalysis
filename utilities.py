@@ -5,6 +5,8 @@ import patsy
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
+import warnings
+
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.stattools import adfuller
 from sklearn.preprocessing import PolynomialFeatures
@@ -22,13 +24,12 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error
 from statsforecast import StatsForecast
 from statsforecast.models import AutoARIMA
 from statsmodels.tsa.statespace.sarimax import SARIMAX
-import warnings
 from urllib3.exceptions import NotOpenSSLWarning
 from pmdarima.arima import auto_arima
+from scipy import stats
+from prophet import Prophet
 
-warnings.filterwarnings("ignore")  # TODO: comprobar funcionamiento
-
-# from pmdarima.arima import auto_arima #Error: Module not working
+warnings.filterwarnings("ignore", category=NotOpenSSLWarning)
 
 
 class SalesAnalysis:  # TODO: add a class for descriptive analysis
@@ -381,6 +382,69 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
 
         plt.show()
 
+    def analysis_residuals(self, residues: pd.Series, fitted_values: pd.Series):
+        """
+        Analiza los residuos de un modelo ARIMAX.
+        Parameters:
+        -----------
+        residues: pd.Series
+            Los residuos del modelo ARIMAX.
+        fitted_values: pd.Series
+            Los valores ajustados del modelo ARIMAX.
+        """
+        # Crear figura con 6 subplots (3 filas x 2 columnas)
+        fig, axes = plt.subplots(3, 2, figsize=(15, 10))
+        fig.suptitle(
+            "Análisis de Residuos - Diagnóstico del Modelo ARIMAX",
+            fontsize=16,
+            fontweight="bold",
+        )
+
+        # 1. Residuos vs. Tiempo (arriba-izquierda)
+        axes[0, 0].plot(residues, color="blue", linewidth=0.8)
+        axes[0, 0].axhline(y=0, color="red", linestyle="--", linewidth=1)
+        axes[0, 0].set_title("Residuos vs. Tiempo", fontsize=12, fontweight="bold")
+        axes[0, 0].set_xlabel("Index")
+        axes[0, 0].set_ylabel("Residuos")
+        axes[0, 0].grid(True, alpha=0.3)
+
+        # 2. Residuos vs. Valores Ajustados (arriba-derecha)
+        axes[0, 1].scatter(fitted_values, residues, alpha=0.5, s=10, color="blue")
+        axes[0, 1].axhline(y=0, color="red", linestyle="--", linewidth=1)
+        axes[0, 1].set_title(
+            "Residuos vs. Valores Ajustados", fontsize=12, fontweight="bold"
+        )
+        axes[0, 1].set_xlabel("Fitted Values")
+        axes[0, 1].set_ylabel("Residuos")
+        axes[0, 1].grid(True, alpha=0.3)
+
+        # 3. Q-Q Plot (medio-izquierda)
+        stats.probplot(residues, dist="norm", plot=axes[1, 0])
+        axes[1, 0].set_title("Q-Q Plot (Normalidad)", fontsize=12, fontweight="bold")
+        axes[1, 0].grid(True, alpha=0.3)
+
+        # 4. ACF (Autocorrelación) (medio-derecha)
+        plot_acf(residues, lags=12, ax=axes[1, 1], alpha=0.05)
+        axes[1, 1].set_title("Autocorrelación (ACF)", fontsize=12, fontweight="bold")
+        axes[1, 1].grid(True, alpha=0.3)
+
+        # 5. PACF (Autocorrelación Parcial) (abajo-izquierda)
+        plot_pacf(residues, lags=12, ax=axes[2, 0], alpha=0.05, method="ywm")
+        axes[2, 0].set_title(
+            "Autocorrelación Parcial (PACF)", fontsize=12, fontweight="bold"
+        )
+        axes[2, 0].grid(True, alpha=0.3)
+
+        # 6. Histograma de Residuos (abajo-derecha)
+        axes[2, 1].hist(residues, bins=30, edgecolor="black", alpha=0.7, color="blue")
+        axes[2, 1].set_title("Histograma de Residuos", fontsize=12, fontweight="bold")
+        axes[2, 1].set_xlabel("Residuos")
+        axes[2, 1].set_ylabel("Frequency")
+        axes[2, 1].grid(True, alpha=0.3)
+
+        plt.tight_layout()
+        plt.show()
+
     #################################### MODELIZATION ####################################
 
     def modelization(
@@ -481,8 +545,18 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
     def modelization_with_backward_elimination(
         self, data_filtered_by_brand: pd.DataFrame
     ) -> tuple[pd.DataFrame, sm.regression.linear_model.RegressionResultsWrapper]:
+        """
+        Modelization with backward elimination.
+        Parameters:
+        data_filtered_by_brand: pd.DataFrame
+            The data filtered by brand.
+        Returns:
+        - model, which is the final model after backward elimination.
+        - design_info, which is the design info of the model. It contains the design matrix and the design formula.
+        - selected_columns, which are the columns that were selected by the backward elimination.
+        """
 
-        data_filtered_by_brand.rename(  # FIXME: Tener en cuenta que cuando hagamos el modelo. Se cambiará la sintaxis de train_data, pero no de test_data
+        data_filtered_by_brand.rename(  # renaming columns for compatibility with patsy
             columns={
                 "value.sales": "value_sales",
                 "unit.sales": "unit_sales",
@@ -498,12 +572,23 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
         y, X = patsy.dmatrices(
             formule, data=data_filtered_by_brand, return_type="dataframe"
         )
+        design_info = X.design_info
 
         # modelo = smf.ols(formula=formule, data=data_filtered_by_brand).fit()
 
-        final_model, selected_columns = self.backward_elimination(X, y)
+        final_model, selected_columns = self.backward_elimination_old(X, y, alpha=0.05)
 
-        return final_model
+        data_filtered_by_brand.rename(
+            columns={
+                "value_sales": "value.sales",
+                "unit_sales": "unit.sales",
+                "volume_sales": "volume.sales",
+                "pack_size": "pack.size",
+            },
+            inplace=True,
+        )
+
+        return final_model, design_info, selected_columns
 
     def modelization_draw1(
         self,
@@ -622,7 +707,7 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
 
         return final_model
 
-    def backward_elimination(self, X, y, alpha=0.05):
+    def backward_elimination_old(self, X, y, alpha=0.05):
         # Agrega la constante para el intercepto
         X = sm.add_constant(X, has_constant="skip")
 
@@ -645,6 +730,175 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
                 break
 
         return model, X.columns
+
+    def backward_elimination(self, X: pd.DataFrame, y, alpha: float = 0.05):
+        """
+        X debe venir de patsy.dmatrices(..., return_type='dataframe')
+        y es un pandas Series/DataFrame de dmatrices (columna única).
+        """
+        # Patsy ya incluye 'Intercept' en X. Aseguramos no añadir otra.
+        X_be = X.copy()
+
+        # nombres de constante posibles
+        CONST_CANDIDATES = [c for c in ["const", "Intercept"] if c in X_be.columns]
+
+        while True:
+            model = sm.OLS(y, X_be).fit()
+            # quitamos p-valor de la constante (si existe) para no eliminarla
+            pvals = model.pvalues.copy()
+            for c in CONST_CANDIDATES:
+                if c in pvals.index:
+                    pvals = pvals.drop(c)
+            if pvals.empty:
+                break
+
+            max_p = pvals.max()
+            if max_p > alpha:
+                worst_var = pvals.idxmax()  # nombre de la peor variable
+                # eliminar por nombre (no por posición)
+                X_be = X_be.drop(columns=[worst_var])
+            else:
+                break
+
+        return model, X_be.columns.tolist()
+
+    def regression_with_backward_elimination(
+        self,
+        data: pd.DataFrame,
+        target: str = "volume.sales",
+        alpha: float = 0.05,
+        verbose: bool = False,
+        aggregation_formule: str = None,
+    ) -> tuple:
+        """
+        Realiza regresión OLS con backward elimination automática.
+
+        Elimina automáticamente las variables no significativas (p-valor > alpha)
+        del modelo de regresión.
+
+        Parameters:
+        -----------
+        data : pd.DataFrame
+            DataFrame con los datos. Debe contener las columnas: price, supermarket,
+            variant, pack.size, brand, y la columna target.
+        target : str, default="volume.sales"
+            Nombre de la columna objetivo (variable dependiente).
+        alpha : float, default=0.05
+            Nivel de significancia para eliminar variables. Variables con p-valor > alpha
+            serán eliminadas.
+        verbose : bool, default=False
+            Si True, muestra el progreso de eliminación de variables.
+        agrregation_formule : str, default=None
+            Fórmula de agregación para agregar al modelo.
+            Example: "Q('dummy_outlier_2022_07_31')"
+        Returns:
+        --------
+        tuple:
+            - model: Modelo final de statsmodels después de backward elimination
+            - selected_vars: Lista de variables seleccionadas (nombres de columnas)
+            - eliminated_vars: Lista de variables eliminadas durante el proceso
+        """
+        # Hacer una copia para no modificar el DataFrame original
+        data_work = data.copy()
+
+        # Renombrar columnas para compatibilidad con patsy (puntos → guiones bajos)
+        #########################################################################################
+        rename_dict = {
+            "value.sales": "value_sales",
+            "unit.sales": "unit_sales",
+            "volume.sales": "volume_sales",
+            "pack.size": "pack_size",
+        }
+        rename_dict = {k: v for k, v in rename_dict.items() if k in data_work.columns}
+        data_work.rename(columns=rename_dict, inplace=True)
+
+        # Actualizar el nombre del target si fue renombrado
+        target_renamed = rename_dict.get(target, target)
+
+        # Crear fórmula base
+        formule = (
+            f"{target_renamed} ~ price + C(supermarket) + C(variant) + C(pack_size) + "
+            f"C(brand) + (price + C(brand)) ** 2"
+        )
+
+        if aggregation_formule is not None:
+            formule += f" + {aggregation_formule}"
+
+        if verbose:
+            print(f"Fórmula del modelo:")
+            print(formule)
+            if aggregation_formule is not None:
+                print(f"\n✅ {aggregation_formule} agregada al modelo")
+
+        # Crear matrices de diseño usando patsy
+        y, X = patsy.dmatrices(formule, data=data_work, return_type="dataframe")
+
+        # Guardar todas las variables iniciales
+        initial_vars = set(X.columns.tolist())
+
+        # Nombres posibles de constante/intercepto
+        CONST_CANDIDATES = [c for c in ["const", "Intercept"] if c in X.columns]
+
+        # Lista para rastrear variables eliminadas
+        eliminated_vars = []
+
+        # Backward elimination
+        iteration = 0
+        while True:
+            iteration += 1
+
+            # Ajustar el modelo OLS
+            model = sm.OLS(y, X).fit()
+
+            # Obtener p-valores excluyendo la constante/intercepto
+            pvals = model.pvalues.copy()
+            for c in CONST_CANDIDATES:
+                if c in pvals.index:
+                    pvals = pvals.drop(c)
+
+            # Si no hay más variables (solo queda la constante), terminar
+            if pvals.empty:
+                if verbose:
+                    print("No quedan variables para eliminar (solo constante).")
+                break
+
+            # Encontrar el p-valor máximo
+            max_p = pvals.max()
+
+            # Si el p-valor máximo es mayor que alpha, eliminar esa variable
+            if max_p > alpha:
+                worst_var = pvals.idxmax()
+
+                if verbose:
+                    print(
+                        f"Iteración {iteration}: Eliminando '{worst_var}' (p-valor = {max_p:.4f})"
+                    )
+
+                # Eliminar la variable por nombre
+                X = X.drop(columns=[worst_var])
+                eliminated_vars.append(worst_var)
+            else:
+                if verbose:
+                    print(
+                        f"Iteración {iteration}: Todas las variables restantes son significativas (p-valor ≤ {alpha})"
+                    )
+                break
+
+        # Ajustar el modelo final con las variables seleccionadas
+        final_model = sm.OLS(y, X).fit()
+
+        # Obtener las variables seleccionadas
+        selected_vars = X.columns.tolist()
+
+        if verbose:
+            print(f"\nResumen:")
+            print(f"  Variables iniciales: {len(initial_vars)}")
+            print(f"  Variables seleccionadas: {len(selected_vars)}")
+            print(f"  Variables eliminadas: {len(eliminated_vars)}")
+            print(f"  R² ajustado: {final_model.rsquared_adj:.4f}")
+
+        return final_model, selected_vars, eliminated_vars
+        pass
 
     def ARIMA(
         self,
@@ -683,71 +937,250 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
 
         return model_arimax
 
-    # def autoArima(
-    #     self,
-    #     endog: pd.Series = None,
-    #     exog: pd.Series = None,
-    #     seasonal: bool = False,
-    # ):
+    def x_train_exog_custom(
+        self,
+        train_data,
+        selected_columns,
+        model,
+        target="volume.sales",
+        aggregation_formule=None,
+    ):
+        """
+        Prepara las variables exógenas usando la misma fórmula que regression_with_backward_elimination.
 
-    #     if exog is None:
-    #         exog = self.data["value.sales"]
+        Parameters:
+        -----------
+        train_data : pd.DataFrame
+            Datos de entrenamiento
+        selected_columns : list
+            Lista de columnas seleccionadas por backward elimination
+        model : statsmodels model
+            Modelo ajustado
+        target : str
+            Nombre de la columna objetivo
 
-    #     if endog is None:
-    #         endog = self.data["volume.sales"]
+        Returns:
+        --------
+        X_train_exog : pd.DataFrame
+            DataFrame con las variables exógenas seleccionadas
+        """
+        train_data_for_patsy = train_data.copy()
 
-    #     model_auto_arima = auto_arima(
-    #         endog,
-    #         exog,
-    #         seasonal=seasonal,
-    #         stepwise=True,
-    #         trace=True,
-    #         error_action="ignore",
-    #         suppress_warnings=True,
-    #     )
+        # Renombrar columnas para compatibilidad con patsy
+        rename_dict = {
+            "value.sales": "value_sales",
+            "unit.sales": "unit_sales",
+            "volume.sales": "volume_sales",
+            "pack.size": "pack_size",
+        }
+        rename_dict = {
+            k: v for k, v in rename_dict.items() if k in train_data_for_patsy.columns
+        }
+        train_data_for_patsy.rename(columns=rename_dict, inplace=True)
 
-    #     return model_auto_arima
+        # Actualizar el nombre del target si fue renombrado
+        target_renamed = rename_dict.get(target, target)
 
-    def auto_arima(self, data, exog):  # TODO: in progress
+        # Usar la MISMA fórmula que en regression_with_backward_elimination
+        formula = (
+            "volume_sales ~ price + C(supermarket) + C(variant) + C(pack_size) + "
+            "C(brand) + (price + C(brand)) ** 2"
+        )
+        if aggregation_formule is not None:
+            formula += f" + {aggregation_formule}"
 
-        # Check that 'volume_sales' column exists
-        if "volume_sales" not in data.columns:
-            raise KeyError("Column 'volume_sales' not found in the input data")
-
-        pdq = [
-            (p, d, q) for p in range(3) for d in range(2) for q in range(3)
-        ]  # TODO: porque ponemos ese rango para comprobar
-        seasonal_pdq = [(P, 1, Q, 12) for P in range(2) for Q in range(2)]
-
-        best_aic = np.inf
-        best_order = None
-        best_seasonal = None
-
-        for order in pdq:
-            for s_order in seasonal_pdq:
-                try:
-                    model = SARIMAX(
-                        data["volume_sales"],
-                        order=order,
-                        seasonal_order=s_order,
-                        exog=exog,
-                        enforce_stationarity=False,
-                        enforce_invertibility=False,
-                    )
-                    res = model.fit(disp=False)
-                    if res.aic < best_aic:
-                        best_aic = res.aic
-                        best_order = order
-                        best_seasonal = s_order
-                except Exception:
-                    continue
-
-        print(
-            f">> Mejor configuración: order={best_order}, "
-            f"seasonal_order={best_seasonal}, AIC={best_aic:.2f}"
+        # Crear la matriz de diseño
+        y_design, X_design = patsy.dmatrices(
+            formula, data=train_data_for_patsy, return_type="dataframe"
         )
 
-        return (best_order, best_seasonal)
+        # Filtrar solo las columnas seleccionadas (excluyendo Intercept)
+        selected_columns_no_intercept = [
+            col for col in selected_columns if col != "Intercept" and col != "const"
+        ]
+
+        # Verificar que las columnas existen
+        missing_cols = [
+            col for col in selected_columns_no_intercept if col not in X_design.columns
+        ]
+        if missing_cols:
+            print(
+                f"⚠️ Advertencia: Las siguientes columnas no se encontraron en X_design: {missing_cols}"
+            )
+            print(f"Columnas disponibles en X_design: {list(X_design.columns)}")
+            # Filtrar solo las que existen
+            selected_columns_no_intercept = [
+                col for col in selected_columns_no_intercept if col in X_design.columns
+            ]
+
+        X_train_exog = X_design[selected_columns_no_intercept]
+
+        # Verificar que coinciden con el modelo
+        model_features = list(model.params.index)
+        exog_features = list(X_train_exog.columns)
+
+        model_features_no_intercept = [
+            f for f in model_features if f not in ["Intercept", "const"]
+        ]
+        if set(model_features_no_intercept) == set(exog_features):
+            print("✅ YES - All features match perfectly!")
+        else:
+            print("❌ NO - Features don't match")
+            print(
+                f"Model features (sin intercept): {sorted(model_features_no_intercept)}"
+            )
+            print(f"Exog features: {sorted(exog_features)}")
+            missing_in_exog = set(model_features_no_intercept) - set(exog_features)
+            missing_in_model = set(exog_features) - set(model_features_no_intercept)
+            if missing_in_exog:
+                print(f"Missing in exog: {missing_in_exog}")
+            if missing_in_model:
+                print(f"Missing in model: {missing_in_model}")
+
+        return X_train_exog
+
+    def x_test_exog(self, test_data, selected_columns, design_info):
+        """
+        Prepare exogenous variables for test data using the SAME transformation
+        as training data (same formula, same selected columns, same design_info).
+
+        Parameters:
+        -----------
+        test_data : pd.DataFrame
+            The test dataset containing the same columns as training data.
+        selected_columns : list
+            The list of columns selected by backward elimination (from modelization_with_backward_elimination).
+        design_info : patsy.DesignInfo
+            The design info from the training data to ensure identical column creation.
+
+        Returns:
+        --------
+        pd.DataFrame
+            Test exogenous variables with the same columns as X_train_exog (without Intercept).
+
+        Notes:
+        ------
+        - Uses the design_info from training to create identical columns
+        - Handles missing categories in test data by using training's design matrix
+        - Filters to use only the selected_columns from backward elimination
+        - Removes Intercept column as it's not needed for exogenous variables
+        """
+        test_data_for_patsy = test_data.copy()
+
+        # Rename columns to match Patsy naming convention
+        test_data_for_patsy.rename(
+            columns={
+                "value.sales": "value_sales",
+                "unit.sales": "unit_sales",
+                "volume.sales": "volume_sales",
+                "pack.size": "pack_size",
+            },
+            inplace=True,
+        )
+
+        # Use the design_info from training to create the SAME design matrix
+        # This ensures that even if some categories are missing in test data,
+        # the same columns will be created (with zeros for missing categories)
+        X_design = patsy.build_design_matrices(
+            [design_info], test_data_for_patsy, return_type="dataframe"
+        )[0]
+
+        # Use the SAME selected columns (without Intercept)
+        selected_columns_no_intercept = [
+            col for col in selected_columns if col != "Intercept"
+        ]
+
+        X_test_exog = X_design[selected_columns_no_intercept]
+
+        return X_test_exog
+
+    def clean_exogenous_variables(self, X_exog, corr_threshold=0.95, verbose=False):
+        """
+        Limpia variables exógenas eliminando:
+        1. Variables constantes (rango = 0)
+        2. Variables con correlación perfecta (|r| = 1.0)
+        3. Variables altamente correlacionadas (|r| > corr_threshold)
+
+        Parameters:
+        -----------
+        X_exog : pd.DataFrame
+            Variables exógenas a limpiar
+        corr_threshold : float, default=0.95
+            Umbral de correlación para eliminar variables (0.95 = 95%)
+        verbose : bool, default=False
+            Si True, imprime información sobre el proceso
+
+        Returns:
+        --------
+        X_clean : pd.DataFrame
+            Variables exógenas limpias
+        removed_vars : list
+            Lista de variables eliminadas
+        cond_number_before : float
+            Número de condición antes de la limpieza
+        cond_number_after : float
+            Número de condición después de la limpieza
+        """
+
+        X_clean = X_exog.copy()
+        removed_vars = []
+
+        # Calcular número de condición inicial
+        try:
+            X_matrix = X_clean.values
+            X_with_const = np.column_stack([np.ones(len(X_matrix)), X_matrix])
+            cond_number_before = np.linalg.cond(X_with_const)
+        except:
+            cond_number_before = None
+
+        # 1. Eliminar variables constantes
+        ranges = X_clean.max() - X_clean.min()
+        constant_vars = ranges[ranges == 0].index.tolist()
+        if constant_vars:
+            removed_vars.extend(constant_vars)
+            X_clean = X_clean.drop(columns=constant_vars)
+
+        # 2. Eliminar variables con correlación perfecta
+        corr_matrix = X_clean.corr()
+        perfect_corr_vars = set()
+
+        for i in range(len(corr_matrix.columns)):
+            for j in range(i + 1, len(corr_matrix.columns)):
+                if abs(corr_matrix.iloc[i, j]) >= 1.0 - 1e-10:
+                    var2 = corr_matrix.columns[j]
+                    if var2 not in perfect_corr_vars:
+                        perfect_corr_vars.add(var2)
+
+        if perfect_corr_vars:
+            removed_vars.extend(list(perfect_corr_vars))
+            X_clean = X_clean.drop(columns=list(perfect_corr_vars))
+
+        # 3. Eliminar variables altamente correlacionadas
+        corr_matrix = X_clean.corr()
+        high_corr_vars = set()
+
+        for i in range(len(corr_matrix.columns)):
+            for j in range(i + 1, len(corr_matrix.columns)):
+                if abs(corr_matrix.iloc[i, j]) > corr_threshold:
+                    var2 = corr_matrix.columns[j]
+                    if var2 not in high_corr_vars:
+                        high_corr_vars.add(var2)
+
+        if high_corr_vars:
+            removed_vars.extend(list(high_corr_vars))
+            X_clean = X_clean.drop(columns=list(high_corr_vars))
+
+        # Calcular número de condición final
+        try:
+            X_matrix_clean = X_clean.values
+            X_with_const_clean = np.column_stack(
+                [np.ones(len(X_matrix_clean)), X_matrix_clean]
+            )
+            cond_number_after = np.linalg.cond(X_with_const_clean)
+        except:
+            cond_number_after = None
+
+        return X_clean, removed_vars, cond_number_before, cond_number_after
 
     #################################### TESTS ####################################
 
@@ -771,23 +1204,29 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
 
         # ARCH test
         arch_test = het_arch(residues)
-        print(f"ARCH p-value: {arch_test[1]} -- range(> 0.05)")
+        print(
+            f"[Heteroscedasticity Test] ARCH p-value: {arch_test[1]} -- range(> 0.05)"
+        )
 
         # Jarque-Bera test
         jb_stat, jb_p_value = jarque_bera(residues)
-        print(f"Jarque-Bera p-value: {jb_p_value} -- range(> 0.05)")
+        print(f"[Normality Test] Jarque-Bera p-value: {jb_p_value} -- range(> 0.05)")
 
         # Shapiro-Wilk test
         sw_stat, sw_p_value = shapiro(residues)
-        print(f"Shapiro-Wilk p-value: {sw_p_value} -- range(> 0.05)")
+        print(f"[Normality Test] Shapiro-Wilk p-value: {sw_p_value} -- range(> 0.05)")
 
         # Ljung-Box test
         ljung_box_test = acorr_ljungbox(residues, lags=[lags_ljungbox])
-        print(f"Ljung-Box p-value:\n {ljung_box_test} -- range(> 0.05)")
+        print(
+            f"[Autocorrelation Test] Ljung-Box p-value:\n {ljung_box_test} -- range(> 0.05)"
+        )
 
         # Durbin-Watson test
         dw_stat = durbin_watson(residues)
-        print(f"Durbin-Watson statistic: {dw_stat} -- range(2.0)")
+        print(
+            f"[Autocorrelation Test first order] Durbin-Watson statistic: {dw_stat} -- range(2.0)"
+        )
 
         return None
 
@@ -820,7 +1259,7 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
 
         # Mostramos los resultados
         print(f"Estadístico ADF: {adf_result[0]}")
-        print(f"Valor p: {adf_result[1]}")
+        print(f"Valor p: {adf_result[1]} -- es estacionaria si p < 0.05")
         print("Valores críticos:")
         for key, value in adf_result[4].items():
             print(f"{key}: {value}")
@@ -953,6 +1392,19 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
     def divide_data_for_train_and_test(
         self, data: pd.DataFrame, train_size: float = 0.8
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        # FIXME: esta funcion no es correcta, hay que cambiarla para que se pueda dividir el data en train y test segun las fechas que se le pasen.
+        """
+        La forma correcta es:
+
+        date_min = data["date"].min()
+        date_max = data["date"].max()
+        date_cutoff = pd.Timestamp('2023-06-30')
+
+        train_data_ = data[data['date'] <= date_cutoff].copy()
+        test_data_ = data[(data['date'] >= date_cutoff + pd.Timedelta(days=1)) & (data['date'] <= date_max)].copy()
+
+        """
+
         """
         Divides the data into training and testing sets based on the specified training size.
 
