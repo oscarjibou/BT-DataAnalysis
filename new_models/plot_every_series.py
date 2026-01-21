@@ -68,7 +68,7 @@ def plot_every_series(data, plot_all=False, filter_brand="brand-14", **kwargs):
     # Opción 2: Filtrar por marca específica (usar si plot_all = False)
     # Puedes poner: "brand-35", "brand-14", "brand-15", o None para no filtrar
     # filter_brand = kwargs.get('filter_brand', None)  # Cambia a None o a otra marca según necesites
-    filter_brand = "brand-15"  # Cambia a None o a otra marca según necesites
+    filter_brand = filter_brand  # Cambia a None o a otra marca según necesites
 
     # Puedes poner valores específicos o None para no filtrar
     filter_supermarket = kwargs.get(
@@ -162,3 +162,33 @@ def plot_every_series(data, plot_all=False, filter_brand="brand-14", **kwargs):
             plt.show()
 
         print(f"\n✅ Se han generado {n_series} gráficos individuales")
+
+
+def series_less_than_36(data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Comprueba que series no tienen datos de los 3 años
+
+    Parameters:
+    data (pd.DataFrame): Dataframe con los datos
+
+    Returns (pd.DataFrame):
+    pd.DataFrame: Dataframe con las series con menos de 36 datos ordenadas por número de datos
+    """
+    date_min = data["date"].min()
+    date_max = data["date"].max()
+
+    # Comprabar que series no tienen datos de los 3 años
+    result_df = pd.DataFrame(columns=["series_id", "length"])
+    for series_id in data["series_id"].unique():
+        series_data = data[data["series_id"] == series_id]
+        if len(series_data) < 36:
+            result_df = pd.concat(
+                [
+                    result_df,
+                    pd.DataFrame(
+                        {"series_id": [series_id], "length": [len(series_data)]}
+                    ),
+                ],
+                ignore_index=True,
+            )
+    return result_df.sort_values(by="length").reset_index(drop=True)

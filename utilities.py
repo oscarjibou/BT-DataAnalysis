@@ -1392,6 +1392,19 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
     def divide_data_for_train_and_test(
         self, data: pd.DataFrame, train_size: float = 0.8
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        # FIXME: esta funcion no es correcta, hay que cambiarla para que se pueda dividir el data en train y test segun las fechas que se le pasen.
+        """
+        La forma correcta es:
+
+        date_min = data["date"].min()
+        date_max = data["date"].max()
+        date_cutoff = pd.Timestamp('2023-06-30')
+
+        train_data_ = data[data['date'] <= date_cutoff].copy()
+        test_data_ = data[(data['date'] >= date_cutoff + pd.Timedelta(days=1)) & (data['date'] <= date_max)].copy()
+
+        """
+
         """
         Divides the data into training and testing sets based on the specified training size.
 
