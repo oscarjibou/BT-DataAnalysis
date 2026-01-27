@@ -41,6 +41,11 @@ def plot_every_series(data, plot_all=False, filter_brand="brand-14", **kwargs):
     If plot_all is True, it will plot all series.
     If plot_all is False, it will plot the series filtered by brand.
     If data['series_id'] is not a column, it will create it.
+    Parameters:
+    **kwargs:
+        filter_supermarket: str, optional
+        filter_variant: str, optional
+        filter_pack_size: str, optional
     """
     # ============================================================================
     # PREPARACIÓN DE LOS DATOS
@@ -127,7 +132,7 @@ def plot_every_series(data, plot_all=False, filter_brand="brand-14", **kwargs):
             print(f"Gráfico {idx+1}/{n_series} completado: {series_id}")
 
             # Crear una nueva figura para cada serie
-            fig, ax = plt.subplots(figsize=(12, 6))
+            fig, ax = plt.subplots(figsize=(9, 4))
 
             # Filtrar datos para esta serie
             series_data = data_to_plot[

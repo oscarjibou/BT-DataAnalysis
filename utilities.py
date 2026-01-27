@@ -1283,14 +1283,14 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
     def ADF_KPSS_test(self, series: pd.Series, series_name: str = "Serie"):
         """
         Tests de estacionariedad ADF y KPSS sobre una serie temporal.
-        
+
         Parameters:
         -----------
         series : pd.Series
             La serie temporal a analizar (debe ser una pd.Series, no un DataFrame)
         series_name : str
             Nombre descriptivo de la serie para los prints
-            
+
         Returns:
         --------
         dict : Diccionario con los resultados de los tests
@@ -1310,56 +1310,90 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
         print("\n📊 Test estacionariedad serie ORIGINAL (d=0)")
         print("-" * 50)
         adfuller_result = adfuller(series)
-        kpss_result = kpss(series, regression='c')
-        print(f"ADF Statistic: {adfuller_result[0]:.4f}, p-value: {adfuller_result[1]:.4f}")
+        kpss_result = kpss(series, regression="c")
+        print(
+            f"ADF Statistic: {adfuller_result[0]:.4f}, p-value: {adfuller_result[1]:.4f}"
+        )
         print(f"KPSS Statistic: {kpss_result[0]:.4f}, p-value: {kpss_result[1]:.4f}")
         adf_stationary = adfuller_result[1] < 0.05
         kpss_stationary = kpss_result[1] > 0.05
-        print(f"   → ADF: {'Estacionaria ✓' if adf_stationary else 'No estacionaria ✗'}")
-        print(f"   → KPSS: {'Estacionaria ✓' if kpss_stationary else 'No estacionaria ✗'}")
-        results['d0'] = {'adf_pvalue': adfuller_result[1], 'kpss_pvalue': kpss_result[1],
-                         'adf_stationary': adf_stationary, 'kpss_stationary': kpss_stationary}
+        print(
+            f"   → ADF: {'Estacionaria ✓' if adf_stationary else 'No estacionaria ✗'}"
+        )
+        print(
+            f"   → KPSS: {'Estacionaria ✓' if kpss_stationary else 'No estacionaria ✗'}"
+        )
+        results["d0"] = {
+            "adf_pvalue": adfuller_result[1],
+            "kpss_pvalue": kpss_result[1],
+            "adf_stationary": adf_stationary,
+            "kpss_stationary": kpss_stationary,
+        }
 
         # Test serie diferenciada una vez (d=1)
         print("\n📊 Test estacionariedad serie DIFERENCIADA (d=1)")
         print("-" * 50)
         adfuller_result_diff = adfuller(series_diff)
-        kpss_result_diff = kpss(series_diff, regression='c')
-        print(f"ADF Statistic: {adfuller_result_diff[0]:.4f}, p-value: {adfuller_result_diff[1]:.4f}")
-        print(f"KPSS Statistic: {kpss_result_diff[0]:.4f}, p-value: {kpss_result_diff[1]:.4f}")
+        kpss_result_diff = kpss(series_diff, regression="c")
+        print(
+            f"ADF Statistic: {adfuller_result_diff[0]:.4f}, p-value: {adfuller_result_diff[1]:.4f}"
+        )
+        print(
+            f"KPSS Statistic: {kpss_result_diff[0]:.4f}, p-value: {kpss_result_diff[1]:.4f}"
+        )
         adf_stationary = adfuller_result_diff[1] < 0.05
         kpss_stationary = kpss_result_diff[1] > 0.05
-        print(f"   → ADF: {'Estacionaria ✓' if adf_stationary else 'No estacionaria ✗'}")
-        print(f"   → KPSS: {'Estacionaria ✓' if kpss_stationary else 'No estacionaria ✗'}")
-        results['d1'] = {'adf_pvalue': adfuller_result_diff[1], 'kpss_pvalue': kpss_result_diff[1],
-                         'adf_stationary': adf_stationary, 'kpss_stationary': kpss_stationary}
+        print(
+            f"   → ADF: {'Estacionaria ✓' if adf_stationary else 'No estacionaria ✗'}"
+        )
+        print(
+            f"   → KPSS: {'Estacionaria ✓' if kpss_stationary else 'No estacionaria ✗'}"
+        )
+        results["d1"] = {
+            "adf_pvalue": adfuller_result_diff[1],
+            "kpss_pvalue": kpss_result_diff[1],
+            "adf_stationary": adf_stationary,
+            "kpss_stationary": kpss_stationary,
+        }
 
         # Test serie diferenciada dos veces (d=2)
         print("\n📊 Test estacionariedad serie SEGUNDA DIFERENCIACIÓN (d=2)")
         print("-" * 50)
         adfuller_result_diff2 = adfuller(series_diff2)
-        kpss_result_diff2 = kpss(series_diff2, regression='c')
-        print(f"ADF Statistic: {adfuller_result_diff2[0]:.4f}, p-value: {adfuller_result_diff2[1]:.4f}")
-        print(f"KPSS Statistic: {kpss_result_diff2[0]:.4f}, p-value: {kpss_result_diff2[1]:.4f}")
+        kpss_result_diff2 = kpss(series_diff2, regression="c")
+        print(
+            f"ADF Statistic: {adfuller_result_diff2[0]:.4f}, p-value: {adfuller_result_diff2[1]:.4f}"
+        )
+        print(
+            f"KPSS Statistic: {kpss_result_diff2[0]:.4f}, p-value: {kpss_result_diff2[1]:.4f}"
+        )
         adf_stationary = adfuller_result_diff2[1] < 0.05
         kpss_stationary = kpss_result_diff2[1] > 0.05
-        print(f"   → ADF: {'Estacionaria ✓' if adf_stationary else 'No estacionaria ✗'}")
-        print(f"   → KPSS: {'Estacionaria ✓' if kpss_stationary else 'No estacionaria ✗'}")
-        results['d2'] = {'adf_pvalue': adfuller_result_diff2[1], 'kpss_pvalue': kpss_result_diff2[1],
-                         'adf_stationary': adf_stationary, 'kpss_stationary': kpss_stationary}
+        print(
+            f"   → ADF: {'Estacionaria ✓' if adf_stationary else 'No estacionaria ✗'}"
+        )
+        print(
+            f"   → KPSS: {'Estacionaria ✓' if kpss_stationary else 'No estacionaria ✗'}"
+        )
+        results["d2"] = {
+            "adf_pvalue": adfuller_result_diff2[1],
+            "kpss_pvalue": kpss_result_diff2[1],
+            "adf_stationary": adf_stationary,
+            "kpss_stationary": kpss_stationary,
+        }
 
         # Recomendación de d
         print("\n" + "=" * 50)
         print("RECOMENDACIÓN PARA d:")
-        if results['d0']['adf_stationary'] and results['d0']['kpss_stationary']:
+        if results["d0"]["adf_stationary"] and results["d0"]["kpss_stationary"]:
             print("   → d=0 (serie ya es estacionaria)")
-            results['recommended_d'] = 0
-        elif results['d1']['adf_stationary'] and results['d1']['kpss_stationary']:
+            results["recommended_d"] = 0
+        elif results["d1"]["adf_stationary"] and results["d1"]["kpss_stationary"]:
             print("   → d=1 (necesita una diferenciación)")
-            results['recommended_d'] = 1
+            results["recommended_d"] = 1
         else:
             print("   → d=2 (necesita dos diferenciaciones)")
-            results['recommended_d'] = 2
+            results["recommended_d"] = 2
         print("=" * 50)
 
         # Gráficos
@@ -1372,11 +1406,13 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
         plt.show()
 
         return results
-    
-    def seasonal_stationarity_test(self, series: pd.Series, m: int = 12, series_name: str = "Serie"):
+
+    def seasonal_stationarity_test(
+        self, series: pd.Series, m: int = 12, series_name: str = "Serie"
+    ):
         """
         Tests de estacionariedad estacional para determinar D.
-        
+
         Parameters:
         -----------
         series : pd.Series
@@ -1385,7 +1421,7 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
             Periodicidad estacional (12 para datos mensuales, 4 para trimestrales, etc.)
         series_name : str
             Nombre descriptivo de la serie
-            
+
         Returns:
         --------
         dict : Diccionario con los resultados de los tests
@@ -1398,92 +1434,133 @@ class SalesAnalysis:  # TODO: add a class for descriptive analysis
 
         # Diferenciación estacional (D=1)
         series_seasonal_diff = series.diff(m).dropna()
-        
+
         # Test serie original para estacionalidad
         print("\n📊 Test estacionariedad serie ORIGINAL (D=0)")
         print("-" * 50)
         adfuller_result = adfuller(series)
-        kpss_result = kpss(series, regression='c')
-        print(f"ADF Statistic: {adfuller_result[0]:.4f}, p-value: {adfuller_result[1]:.4f}")
+        kpss_result = kpss(series, regression="c")
+        print(
+            f"ADF Statistic: {adfuller_result[0]:.4f}, p-value: {adfuller_result[1]:.4f}"
+        )
         print(f"KPSS Statistic: {kpss_result[0]:.4f}, p-value: {kpss_result[1]:.4f}")
         adf_stationary = adfuller_result[1] < 0.05
         kpss_stationary = kpss_result[1] > 0.05
-        print(f"   → ADF: {'Estacionaria ✓' if adf_stationary else 'No estacionaria ✗'}")
-        print(f"   → KPSS: {'Estacionaria ✓' if kpss_stationary else 'No estacionaria ✗'}")
-        results['D0'] = {'adf_pvalue': adfuller_result[1], 'kpss_pvalue': kpss_result[1],
-                         'adf_stationary': adf_stationary, 'kpss_stationary': kpss_stationary}
+        print(
+            f"   → ADF: {'Estacionaria ✓' if adf_stationary else 'No estacionaria ✗'}"
+        )
+        print(
+            f"   → KPSS: {'Estacionaria ✓' if kpss_stationary else 'No estacionaria ✗'}"
+        )
+        results["D0"] = {
+            "adf_pvalue": adfuller_result[1],
+            "kpss_pvalue": kpss_result[1],
+            "adf_stationary": adf_stationary,
+            "kpss_stationary": kpss_stationary,
+        }
 
         # Test serie con diferenciación estacional (D=1)
-        print(f"\n📊 Test estacionariedad serie con DIFERENCIACIÓN ESTACIONAL (D=1, lag={m})")
+        print(
+            f"\n📊 Test estacionariedad serie con DIFERENCIACIÓN ESTACIONAL (D=1, lag={m})"
+        )
         print("-" * 50)
         adfuller_result_s = adfuller(series_seasonal_diff)
-        kpss_result_s = kpss(series_seasonal_diff, regression='c')
-        print(f"ADF Statistic: {adfuller_result_s[0]:.4f}, p-value: {adfuller_result_s[1]:.4f}")
-        print(f"KPSS Statistic: {kpss_result_s[0]:.4f}, p-value: {kpss_result_s[1]:.4f}")
+        kpss_result_s = kpss(series_seasonal_diff, regression="c")
+        print(
+            f"ADF Statistic: {adfuller_result_s[0]:.4f}, p-value: {adfuller_result_s[1]:.4f}"
+        )
+        print(
+            f"KPSS Statistic: {kpss_result_s[0]:.4f}, p-value: {kpss_result_s[1]:.4f}"
+        )
         adf_stationary = adfuller_result_s[1] < 0.05
         kpss_stationary = kpss_result_s[1] > 0.05
-        print(f"   → ADF: {'Estacionaria ✓' if adf_stationary else 'No estacionaria ✗'}")
-        print(f"   → KPSS: {'Estacionaria ✓' if kpss_stationary else 'No estacionaria ✗'}")
-        results['D1'] = {'adf_pvalue': adfuller_result_s[1], 'kpss_pvalue': kpss_result_s[1],
-                         'adf_stationary': adf_stationary, 'kpss_stationary': kpss_stationary}
+        print(
+            f"   → ADF: {'Estacionaria ✓' if adf_stationary else 'No estacionaria ✗'}"
+        )
+        print(
+            f"   → KPSS: {'Estacionaria ✓' if kpss_stationary else 'No estacionaria ✗'}"
+        )
+        results["D1"] = {
+            "adf_pvalue": adfuller_result_s[1],
+            "kpss_pvalue": kpss_result_s[1],
+            "adf_stationary": adf_stationary,
+            "kpss_stationary": kpss_stationary,
+        }
 
         # Análisis de ACF para detectar estacionalidad
-        print(f"\n📊 Análisis ACF para detectar patrón estacional (lags múltiplos de {m})")
+        print(
+            f"\n📊 Análisis ACF para detectar patrón estacional (lags múltiplos de {m})"
+        )
         print("-" * 50)
         from statsmodels.tsa.stattools import acf
-        
+
         # Limitar nlags al máximo permitido por la longitud de la serie
-        max_lag = min(3*m, len(series) - 1)
+        max_lag = min(3 * m, len(series) - 1)
         acf_values = acf(series, nlags=max_lag)
-        
+
         # Solo incluir lags estacionales que estén disponibles
-        seasonal_lags = [lag for lag in [m, 2*m, 3*m] if lag < len(acf_values)]
-        
+        seasonal_lags = [lag for lag in [m, 2 * m, 3 * m] if lag < len(acf_values)]
+
         print("Autocorrelaciones en lags estacionales:")
         significant_seasonal = False
         significance = 1.96 / np.sqrt(len(series))
-        
+
         if len(seasonal_lags) == 0:
-            print(f"   ⚠️ Serie muy corta ({len(series)} obs). No se pueden analizar lags estacionales.")
+            print(
+                f"   ⚠️ Serie muy corta ({len(series)} obs). No se pueden analizar lags estacionales."
+            )
         else:
             for lag in seasonal_lags:
                 acf_val = acf_values[lag]
                 is_significant = abs(acf_val) > significance
                 if is_significant:
                     significant_seasonal = True
-                print(f"   Lag {lag}: ACF = {acf_val:.4f} {'(significativo ✗ - hay estacionalidad)' if is_significant else '(no significativo ✓)'}")
-        
-        results['significant_seasonal_acf'] = significant_seasonal
+                print(
+                    f"   Lag {lag}: ACF = {acf_val:.4f} {'(significativo ✗ - hay estacionalidad)' if is_significant else '(no significativo ✓)'}"
+                )
+
+        results["significant_seasonal_acf"] = significant_seasonal
 
         # Recomendación de D
         print("\n" + "=" * 50)
         print("RECOMENDACIÓN PARA D:")
         if significant_seasonal:
             print(f"   → D=1 (se detecta patrón estacional significativo en ACF)")
-            results['recommended_D'] = 1
-        elif not results['D0']['adf_stationary'] or not results['D0']['kpss_stationary']:
+            results["recommended_D"] = 1
+        elif (
+            not results["D0"]["adf_stationary"] or not results["D0"]["kpss_stationary"]
+        ):
             # Si hay correlaciones estacionales significativas, probablemente necesita D=1
             print(f"   → D=1 (la serie original no es completamente estacionaria)")
-            results['recommended_D'] = 1
+            results["recommended_D"] = 1
         else:
             print(f"   → D=0 (no se detecta patrón estacional fuerte)")
-            results['recommended_D'] = 0
+            results["recommended_D"] = 0
         print("=" * 50)
 
         # Gráficos
         fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(14, 10))
-        
+
         # Serie original y diferenciada estacionalmente
         series.plot(ax=axs[0, 0], title="Serie original (D=0)")
-        series_seasonal_diff.plot(ax=axs[0, 1], title=f"Serie con diferenciación estacional (D=1, lag={m})")
-        
+        series_seasonal_diff.plot(
+            ax=axs[0, 1], title=f"Serie con diferenciación estacional (D=1, lag={m})"
+        )
+
         # ACF de ambas - limitar lags según longitud de serie
-        acf_lags_original = min(3*m, len(series) - 2)
-        acf_lags_diff = min(3*m, len(series_seasonal_diff) - 2)
-        
-        plot_acf(series, lags=acf_lags_original, ax=axs[1, 0], title="ACF Serie Original")
-        plot_acf(series_seasonal_diff, lags=acf_lags_diff, ax=axs[1, 1], title=f"ACF Serie Diferenciada Estacionalmente")
-        
+        acf_lags_original = min(3 * m, len(series) - 2)
+        acf_lags_diff = min(3 * m, len(series_seasonal_diff) - 2)
+
+        plot_acf(
+            series, lags=acf_lags_original, ax=axs[1, 0], title="ACF Serie Original"
+        )
+        plot_acf(
+            series_seasonal_diff,
+            lags=acf_lags_diff,
+            ax=axs[1, 1],
+            title=f"ACF Serie Diferenciada Estacionalmente",
+        )
+
         plt.tight_layout()
         plt.show()
 
