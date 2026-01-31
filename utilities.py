@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
 import warnings
+import seaborn as sns
 
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.stattools import adfuller
@@ -29,6 +30,7 @@ from urllib3.exceptions import NotOpenSSLWarning
 from pmdarima.arima import auto_arima
 from scipy import stats
 from prophet import Prophet
+from catboost import CatBoostRegressor  
 
 warnings.filterwarnings("ignore", category=NotOpenSSLWarning)
 
